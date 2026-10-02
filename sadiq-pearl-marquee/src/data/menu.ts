@@ -49,14 +49,6 @@ export const menuSheets = [
 ];
 export const menuPdf = "/menu/sadiq-pearl-marquee-menu-card.pdf";
 
-// Terms & conditions ("شرائط و ضوابط") as printed on the card, translated from Urdu.
-export const terms: { title: string; body: string }[] = [
-  { title: "Minimum guests", body: "All services are for a minimum of 300 guests. For fewer guests, an extra Rs. 300 per head is charged." },
-  { title: "Outside catering & decoration", body: "Catering or decoration from outside is strictly not allowed." },
-  { title: "Your belongings", body: "During the function and when leaving the hall, you are responsible for keeping your valuables safe." },
-  { title: "AC charges", body: "AC charges are Rs. 20,000 for one hour." },
-  { title: "Fireworks & firing", body: "Fireworks and firing are strictly prohibited. The person who books the hall is fully responsible for any violation." },
-  { title: "Service charges & extra time", body: "5% service charges apply. Extra time is charged at Rs. 20,000 per hour." },
-  { title: "Extra services", body: "Extra decoration, extra lighting, sound system and other extra services are charged separately." },
-  { title: "Taxes & advance", body: "All government taxes and regulations apply to the customer. The advance amount is non-refundable." },
-];
+// Terms & conditions ("شرائط و ضوابط"): the official venue terms live in ./policies.ts
+// (single source); re-exported here for the existing menu / terms components.
+export { OFFICIAL_VENUE_TERMS as terms } from "./policies.ts";

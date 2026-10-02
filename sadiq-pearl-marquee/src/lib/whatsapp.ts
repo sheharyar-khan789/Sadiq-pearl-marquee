@@ -1,8 +1,9 @@
 import { business } from "./config";
 
-export const WHATSAPP_RAW_NUMBER = "03455673921";
-export const WHATSAPP_INTL_NUMBER = "923455673921";
-export const WHATSAPP_DISPLAY_NUMBER = "0345 5673921";
+// Single source: business.whatsappNumber in config.ts ("923455673921").
+export const WHATSAPP_INTL_NUMBER = business.whatsappNumber as string;
+export const WHATSAPP_RAW_NUMBER = `0${WHATSAPP_INTL_NUMBER.slice(2)}`; // 03455673921
+export const WHATSAPP_DISPLAY_NUMBER = WHATSAPP_RAW_NUMBER.replace(/(\d{4})(\d+)/, "$1 $2"); // 0345 5673921
 
 export const DEFAULT_WHATSAPP_MESSAGE =
   "Assalam o Alaikum, I am interested in Sadiq Pearl Marquee and would like to ask about booking availability.";

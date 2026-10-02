@@ -14,11 +14,18 @@ const paths = {
   groups: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a6 6 0 0 1 12 0M17 11a2.5 2.5 0 1 0 0-5M17 14a5 5 0 0 1 4 6",
   light: "M12 3v2M4.6 6.6l1.4 1.4M3 14h2M19 14h2M18 8l1.4-1.4M7 18a5 5 0 1 1 10 0M4 21h16",
   play: "M8 5v14l11-7z",
+  pause: "M8 5v14M16 5v14",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
+  eye: "M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  eyeOff: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2",
+  alert: "M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
   prev: "M15 5l-7 7 7 7",
   next: "M9 5l7 7-7 7",
   download: "M12 4v11M7 11l5 5 5-5M5 20h14",
   check: "M5 12.5l4.5 4.5L19 7",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
+  bell: "M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0",
   mail: "M4 6h16v12H4zM4 7l8 6 8-6",
   video: "M4 6h11v12H4zM15 10l5-3v10l-5-3",
   doc: "M7 3h7l4 4v14H7zM14 3v5h4M10 13h5M10 17h5",
@@ -67,7 +74,8 @@ export function Stars({ value, className = "w-4 h-4" }: { value: number; classNa
   );
   return (
     <span className="relative inline-block" role="img" aria-label={`${value} out of 5 stars`}>
-      <span className="text-line">{row}</span>
+      {/* Unfilled stars: faded gold, visible on light and dark backgrounds alike. */}
+      <span className="text-gold-container opacity-30">{row}</span>
       <span className="absolute inset-0 overflow-hidden text-gold-container" style={{ width: `${pct}%` }}>
         {row}
       </span>

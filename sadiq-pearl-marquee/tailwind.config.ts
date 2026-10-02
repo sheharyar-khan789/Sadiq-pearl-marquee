@@ -1,54 +1,70 @@
 import type { Config } from "tailwindcss";
 
-// Palette + type follow the Google Stitch redesign (warm ivory, antique gold,
-// Playfair Display + Plus Jakarta Sans).
+// Sadiq Pearl design tokens: warm ivory, deep espresso, champagne-gold accents.
+// Gold is an accent colour; `gold.DEFAULT` is the only gold that is safe for
+// small text on light backgrounds (≥5:1). `gold.container` is decorative on
+// light backgrounds and text-safe only on espresso.
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
       colors: {
         surface: {
-          DEFAULT: "#fcf9f5",
-          low: "#f6f3ef",
-          mid: "#f0edea",
-          high: "#ebe8e4",
-          highest: "#e5e2de",
+          DEFAULT: "#fbf8f3",
+          low: "#f5efe6",
+          mid: "#eee6da",
+          high: "#e5dacb",
+          highest: "#dccfbc",
         },
-        ink: { DEFAULT: "#1c1c1a", soft: "#4e4638", muted: "#645d54" },
+        ink: { DEFAULT: "#1e1915", soft: "#4a4039", muted: "#6b6057" },
         gold: {
-          DEFAULT: "#795916",
-          container: "#b8914a",
-          light: "#ebc074",
-          pale: "#ffdea9",
+          DEFAULT: "#7a5a26",
+          container: "#b38e55",
+          light: "#d9bc86",
+          pale: "#f0e2c4",
         },
-        line: { DEFAULT: "#d2c5b3", strong: "#807667" },
-        night: "#31302e",
+        espresso: {
+          DEFAULT: "#17120f",
+          800: "#211a16",
+          700: "#2c241e",
+          600: "#3a302a",
+        },
+        line: { DEFAULT: "#e4d9c9", strong: "#b9aa94" },
+        night: "#17120f",
       },
       fontFamily: {
-        display: ["var(--font-playfair)", "Georgia", "serif"],
-        body: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+        body: ["var(--font-body)", "system-ui", "sans-serif"],
       },
-      borderRadius: { DEFAULT: "0.125rem", lg: "0.25rem", xl: "0.5rem" },
+      fontSize: {
+        eyebrow: ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.22em" }],
+      },
+      borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.875rem", "2xl": "1.25rem", "3xl": "1.75rem" },
       maxWidth: { content: "1320px" },
+      spacing: { 13: "3.25rem", 18: "4.5rem", 22: "5.5rem" },
+      transitionDuration: { 400: "400ms", 600: "600ms", 900: "900ms" },
       transitionTimingFunction: { elegant: "cubic-bezier(0.16, 1, 0.3, 1)" },
+      boxShadow: {
+        soft: "0 1px 2px rgba(30,25,21,0.04), 0 8px 24px -12px rgba(30,25,21,0.12)",
+        lift: "0 2px 4px rgba(30,25,21,0.05), 0 24px 48px -24px rgba(30,25,21,0.28)",
+        frame: "0 30px 80px -30px rgba(0,0,0,0.65)",
+      },
       keyframes: {
-        fadeInUp: {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
+        fadeUp: {
+          "0%": { opacity: "0", transform: "translateY(18px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        scaleIn: {
-          "0%": { opacity: "0", transform: "scale(0.97)" },
-          "100%": { opacity: "1", transform: "scale(1)" },
+        fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
+        heroZoom: {
+          "0%": { transform: "scale(1.08)" },
+          "100%": { transform: "scale(1)" },
         },
       },
       animation: {
-        "fade-in-up": "fadeInUp 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-        "fade-in": "fadeIn 0.6s ease-out forwards",
-        "scale-in": "scaleIn 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        // `both` fill keeps elements hidden during their delay (no flicker).
+        "fade-up": "fadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "fade-in": "fadeIn 1.2s ease-out both",
+        "hero-zoom": "heroZoom 2.4s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
     },
   },

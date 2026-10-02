@@ -1,271 +1,251 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import Image, { getImageProps } from "next/image";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { business, media } from "@/lib/config";
 import { getWhatsAppUrl } from "@/lib/whatsapp";
+import BookNowButton from "./BookNowButton";
 import Icon, { Stars, WhatsAppGlyph } from "./Icon";
 
+function useMedia(query: string) {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(query).matches,
+    () => null // unknown on the server: render posters only
+  );
+}
+
+// Art-directed poster: portrait stage frame on phones/tablets, night facade on desktop.
+const posterCommon = { alt: "", sizes: "100vw", quality: 75, loading: "eager", fetchPriority: "high" } as const;
+const {
+  props: { srcSet: desktopPoster },
+} = getImageProps({ ...posterCommon, src: media.hero, width: 1024, height: 576 });
+const {
+  props: { srcSet: mobilePoster, ...posterImg },
+} = getImageProps({ ...posterCommon, src: media.heroStagePoster, width: 720, height: 1280 });
+
 export default function Hero() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoReady, setVideoReady] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [parallaxY, setParallaxY] = useState(0);
+  const isDesktop = useMedia("(min-width: 1024px)");
+  const reduceMotion = useMedia("(prefers-reduced-motion: reduce)");
+  const sectionRef = useRef<HTMLElement>(null);
+  const bgVideoRef = useRef<HTMLVideoElement>(null);
+  const portalVideoRef = useRef<HTMLVideoElement>(null);
+  const [loaded, setLoaded] = useState(false); // page finished loading → safe to fetch video
+  const [bgReady, setBgReady] = useState(false);
+  const [paused, setPaused] = useState(false);
 
+  // Defer video downloads until after the page (and its LCP poster) has loaded.
   useEffect(() => {
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setPrefersReducedMotion(motionQuery.matches);
-
-    const onMotionChange = (e: MediaQueryListEvent) => {
-      setPrefersReducedMotion(e.matches);
-    };
-    motionQuery.addEventListener("change", onMotionChange);
-
-    // If reduced motion is not preferred, initialize video & scroll parallax
-    if (!motionQuery.matches) {
-      const vid = videoRef.current;
-      if (vid) {
-        vid.play().catch(() => {
-          // Autoplay blocked by browser policy — poster image remains fallback
-          setVideoReady(false);
-        });
-      }
-
-      // Parallax scroll effect for desktop
-      let ticking = false;
-      const handleScroll = () => {
-        if (!ticking) {
-          window.requestAnimationFrame(() => {
-            if (window.innerWidth >= 1024) {
-              const scrollY = window.scrollY;
-              // Subtle, bounded parallax shift (max 24px)
-              const offset = Math.min(scrollY * 0.05, 24);
-              setParallaxY(-offset);
-            } else {
-              setParallaxY(0);
-            }
-            ticking = false;
-          });
-          ticking = true;
-        }
-      };
-
-      window.addEventListener("scroll", handleScroll, { passive: true });
-      return () => {
-        motionQuery.removeEventListener("change", onMotionChange);
-        window.removeEventListener("scroll", handleScroll);
-      };
-    }
-
-    return () => {
-      motionQuery.removeEventListener("change", onMotionChange);
-    };
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    if (saveData) return;
+    const start = () => window.setTimeout(() => setLoaded(true), 250);
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start, { once: true });
+    return () => window.removeEventListener("load", start);
   }, []);
 
-  const whatsappInquiryUrl = getWhatsAppUrl(
+  // One film per device: full-bleed on phones/tablets, inside the arch portal on desktop.
+  const playVideos = loaded && reduceMotion === false && isDesktop !== null;
+
+  // Pause while the hero is off-screen, and respect the visitor's pause choice.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || !playVideos) return;
+    const videos = () => [bgVideoRef.current, portalVideoRef.current].filter(Boolean) as HTMLVideoElement[];
+    const io = new IntersectionObserver(([entry]) => {
+      for (const v of videos()) {
+        if (entry.isIntersecting && !paused) v.play().catch(() => {});
+        else v.pause();
+      }
+    });
+    io.observe(section);
+    return () => io.disconnect();
+  }, [playVideos, paused, isDesktop]);
+
+  const whatsappUrl = getWhatsAppUrl(
     "Assalam o Alaikum, I am interested in Sadiq Pearl Marquee and would like to ask about booking availability."
   );
 
   return (
     <section
-      id="home"
-      className="relative pt-20 sm:pt-24 lg:pt-28 pb-12 sm:pb-16 lg:pb-24 overflow-hidden bg-gradient-to-b from-surface via-surface-low to-surface"
+      ref={sectionRef}
+      id="top"
+      aria-labelledby="hero-title"
+      className="relative isolate flex min-h-[100svh] flex-col justify-end overflow-hidden bg-espresso text-white lg:h-[100svh] lg:max-h-[1040px] lg:min-h-[720px] lg:justify-center"
     >
-      {/* Subtle atmospheric ambient glow */}
+      {/* Layer 1 — background film */}
+      <div aria-hidden="true" className="absolute inset-0 -z-10 animate-hero-zoom">
+        <picture>
+          <source media="(min-width: 1024px)" srcSet={desktopPoster} />
+          <source srcSet={mobilePoster} />
+          {/* Art-directed <picture> via getImageProps (alt="" is in the spread: decorative).
+              Desktop: soft focus on the far layer so the sharp portal and text read as nearer planes. */}
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+          <img {...posterImg} className="h-full w-full object-cover lg:scale-105 lg:blur-[3px]" />
+        </picture>
+        {playVideos && !isDesktop && (
+          <video
+            ref={bgVideoRef}
+            src={media.heroStageVideo}
+            muted
+            loop
+            playsInline
+            autoPlay={!paused}
+            preload="auto"
+            onPlaying={() => setBgReady(true)}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-[1400ms] ${
+              bgReady ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+      </div>
+
+      {/* Readability: dark from the text side, light over the imagery */}
       <div
-        className="absolute top-0 right-1/4 w-96 h-96 bg-gold/5 rounded-full blur-3xl pointer-events-none -z-10"
         aria-hidden="true"
+        className="absolute inset-0 -z-10 bg-gradient-to-t from-espresso via-espresso/75 to-espresso/25 lg:bg-gradient-to-r lg:from-espresso/95 lg:via-espresso/80 lg:to-espresso/40"
       />
+      {/* Phones: the stage films are bright (white drape, marble), so dim the whole frame a little more. */}
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-espresso/30 lg:hidden" />
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 -z-10 h-40 bg-gradient-to-b from-espresso/70 to-transparent" />
+      <div aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-10 hidden h-48 bg-gradient-to-t from-espresso/80 to-transparent lg:block" />
 
-      <div className="max-w-content mx-auto container-px">
-        <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 xl:gap-16 items-center">
-          {/* Left Column: Premium Positioning & Content */}
-          <div className="lg:col-span-7 flex flex-col justify-center">
-            {/* Eyebrow badge */}
-            <div className={`${prefersReducedMotion ? "" : "animate-fade-in-up"}`}>
-              <span className="inline-flex items-center gap-2 px-3 sm:px-3.5 py-1 rounded-full bg-gold/10 border border-gold/25 text-gold text-[11px] sm:text-xs font-semibold uppercase tracking-[0.12em] sm:tracking-[0.16em] mb-4 sm:mb-6">
-                <span className="w-1.5 h-1.5 rounded-full bg-gold shrink-0 animate-pulse" />
-                <span>Premium Wedding &amp; Event Venue · Sarai Alamgir</span>
-              </span>
-            </div>
+      <div className="container-px relative mx-auto grid w-full max-w-content items-center gap-12 pb-10 pt-28 sm:pb-14 grid-cols-1 lg:grid-cols-12 lg:pb-0 lg:pt-20">
+        {/* Layer 3 — message */}
+        <div className="max-w-2xl lg:col-span-7">
+          <p className="eyebrow eyebrow-light animate-fade-up" style={{ animationDelay: "150ms" }}>
+            <span>
+              Wedding &amp; Event Venue<span className="hidden sm:inline"> · Sarai Alamgir</span>
+            </span>
+          </p>
+          <h1
+            id="hero-title"
+            className="mt-5 animate-fade-up font-display text-[3.25rem] font-medium leading-[0.95] tracking-[-0.01em] sm:text-7xl lg:text-[5.25rem] xl:text-[6rem]"
+            style={{ animationDelay: "250ms" }}
+          >
+            Sadiq Pearl
+            <span className="block italic text-gold-light">Marquee</span>
+          </h1>
+          <p
+            className="mt-6 max-w-xl animate-fade-up font-display text-2xl italic leading-snug text-white/90 sm:text-[1.75rem]"
+            style={{ animationDelay: "380ms" }}
+          >
+            {business.tagline}.
+          </p>
+          <p
+            className="mt-4 max-w-lg animate-fade-up text-[0.9375rem] leading-relaxed text-white/75 sm:text-base"
+            style={{ animationDelay: "480ms" }}
+          >
+            Weddings, mehndi, barat, walima and family celebrations in Kakrot, Sarai Alamgir — with in-house
+            catering, table service and free parking.
+          </p>
 
-            {/* Main Headline */}
-            <h1
-              className={`font-display text-3xl sm:text-4xl md:text-5xl lg:text-[56px] xl:text-[62px] leading-[1.12] sm:leading-[1.1] text-ink tracking-tight font-medium break-words ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-100"
-              }`}
-            >
-              Sadiq Pearl Marquee
-            </h1>
-
-            {/* Tagline / Subheading */}
-            <p
-              className={`font-display italic text-xl sm:text-2xl text-gold-container mt-3 sm:mt-4 ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-200"
-              }`}
-            >
-              {business.tagline}
-            </p>
-
-            {/* Verified Venue Positioning Copy */}
-            <p
-              className={`mt-4 sm:mt-5 text-base sm:text-lg leading-relaxed text-ink-soft max-w-xl ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-200"
-              }`}
-            >
-              Situated on Rashidpur–Orangabad Road in Kakrot, Sarai Alamgir. An
-              exquisite venue crafted for weddings, mehndi, barat, walima, and
-              unforgettable family celebrations, offering gracious table service
-              dining and dedicated parking.
-            </p>
-
-            {/* Trust and Feature Badges */}
-            <div
-              className={`mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs sm:text-sm text-ink-soft ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-300"
-              }`}
-            >
-              <div className="inline-flex items-center gap-2 bg-surface border border-line/60 rounded-full px-3 py-1">
-                <Stars value={business.rating} className="w-4 h-4 text-gold" />
-                <span>
-                  <strong className="text-ink font-semibold">{business.rating}</strong> / 5
-                  · {business.reviewCount} Google reviews
-                </span>
-              </div>
-              <div className="inline-flex items-center gap-1.5">
-                <Icon name="parking" className="w-4 h-4 text-gold" />
-                <span>Free parking</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5">
-                <Icon name="dining" className="w-4 h-4 text-gold" />
-                <span>Table service</span>
-              </div>
-            </div>
-
-            {/* Action Buttons: Primary & Secondary CTAs */}
-            <div
-              className={`mt-8 sm:mt-9 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-400"
-              }`}
-            >
-              {/* Primary CTA: INQUIRE ON WHATSAPP */}
-              <a
-                href={whatsappInquiryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Inquire on WhatsApp: 0345 5673921"
-                className="inline-flex items-center justify-center gap-2.5 bg-gold hover:bg-gold-container text-white font-semibold text-sm sm:text-base h-12 sm:h-13 px-7 rounded shadow-md hover:shadow-lg transition-all active:scale-[0.99]"
-              >
-                <WhatsAppGlyph className="w-5 h-5 fill-current" />
-                <span>INQUIRE ON WHATSAPP</span>
-              </a>
-
-              {/* Secondary CTA: EXPLORE VENUE */}
-              <a
-                href="#features"
-                className="inline-flex items-center justify-center gap-2 h-12 sm:h-13 px-7 rounded border border-gold/70 text-gold hover:bg-gold hover:text-white font-semibold text-sm sm:text-base transition-colors"
-              >
-                <span>EXPLORE VENUE</span>
-                <Icon name="down" className="w-4 h-4" />
-              </a>
-            </div>
-
-            {/* Microcopy confirming direct number */}
-            <p
-              className={`mt-3.5 text-xs text-ink-muted ${
-                prefersReducedMotion ? "" : "animate-fade-in-up delay-500"
-              }`}
-            >
-              Direct contact with venue management on WhatsApp ·{" "}
-              <a
-                href={whatsappInquiryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gold font-medium hover:underline"
-              >
-                0345 5673921
-              </a>
-            </p>
+          <div
+            className="mt-8 flex animate-fade-up flex-col gap-3 sm:flex-row"
+            style={{ animationDelay: "580ms" }}
+          >
+            <BookNowButton className="btn btn-accent sm:min-w-[210px]">
+              Book Your Event
+              <Icon name="arrow" className="h-4 w-4" />
+            </BookNowButton>
+            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-light">
+              <WhatsAppGlyph className="h-[18px] w-[18px]" />
+              WhatsApp Us
+            </a>
           </div>
 
-          {/* Right Column: Cinematic Hero Media */}
-          <div className="lg:col-span-5">
-            <div
-              className={`relative mx-auto w-full max-w-lg lg:max-w-none transition-transform duration-300 ease-out ${
-                prefersReducedMotion ? "" : "animate-scale-in"
-              }`}
-              style={{
-                transform: !prefersReducedMotion && parallaxY ? `translateY(${parallaxY}px)` : undefined,
-              }}
-            >
-              {/* Cinematic Frame */}
-              <figure className="relative aspect-[4/5] sm:aspect-[16/11] lg:aspect-[4/5] overflow-hidden rounded-2xl bg-night shadow-2xl ring-1 ring-gold/25">
-                {/* Immediate fallback/poster image for zero LCP delay & zero layout shift */}
-                <Image
-                  src={media.hero}
-                  alt="Sadiq Pearl Marquee illuminated facade at night on Rashidpur–Orangabad Road, Kakrot, Sarai Alamgir"
-                  fill
-                  priority
-                  sizes="(min-width: 1280px) 520px, (min-width: 1024px) 42vw, (min-width: 640px) 80vw, 100vw"
-                  className={`object-cover transition-opacity duration-1000 ${
-                    videoReady ? "opacity-0" : "opacity-100"
-                  }`}
-                />
+          <ul
+            className="mt-8 flex animate-fade-up flex-wrap items-center gap-x-6 gap-y-3 text-[0.8125rem] text-white/75"
+            style={{ animationDelay: "680ms" }}
+          >
+            <li className="flex items-center gap-2">
+              <Stars value={business.rating} className="h-3.5 w-3.5" />
+              <span>
+                <strong className="font-semibold text-white">{business.rating}</strong> · {business.reviewCount} Google
+                reviews
+              </span>
+            </li>
+            <li className="flex items-center gap-2">
+              <Icon name="parking" className="h-4 w-4 text-gold-light" />
+              Free parking
+            </li>
+            <li className="flex items-center gap-2">
+              <Icon name="dining" className="h-4 w-4 text-gold-light" />
+              Table service
+            </li>
+          </ul>
+        </div>
 
-                {/* Hero video: deferred, muted, looped, autoplay, playsInline */}
+        {/* Layer 2 — arch portal with the stage film (desktop) */}
+        <div className="relative hidden lg:col-span-5 lg:block">
+          <div data-parallax="0.06" className="relative mx-auto w-[min(100%,360px)] xl:w-[380px]">
+            <div
+              data-tilt
+              className="relative aspect-[9/14] animate-fade-in overflow-hidden rounded-t-[999px] rounded-b-2xl bg-espresso-800 shadow-frame ring-1 ring-gold-light/40"
+              style={{ animationDelay: "400ms" }}
+            >
+              <Image
+                src={media.heroStagePoster}
+                alt="Stage set with a red and white rose frame and gold sofas at Sadiq Pearl Marquee"
+                fill
+                sizes="380px"
+                className="object-cover"
+              />
+              {playVideos && isDesktop && (
                 <video
-                  ref={videoRef}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-                    videoReady ? "opacity-100" : "opacity-0"
-                  }`}
-                  poster={media.hero}
-                  autoPlay
+                  ref={portalVideoRef}
+                  src={media.heroStageVideo}
                   muted
                   loop
                   playsInline
-                  preload="metadata"
-                  onPlaying={() => setVideoReady(true)}
-                  onCanPlay={() => {
-                    if (!prefersReducedMotion) {
-                      videoRef.current?.play().catch(() => {});
-                    }
-                  }}
+                  autoPlay={!paused}
+                  preload="auto"
                   aria-hidden="true"
-                >
-                  <source src={media.heroVideo} type="video/mp4" />
-                </video>
-
-                {/* Atmospheric gradient for readability */}
-                <div
-                  className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-night/90 via-night/40 to-transparent pointer-events-none"
-                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
-
-                {/* Top Location Badge */}
-                <div className="absolute top-4 left-4 bg-night/70 backdrop-blur-md text-white/95 border border-white/15 rounded-full px-3.5 py-1.5 flex items-center gap-1.5 text-xs shadow-md">
-                  <Icon name="pin" className="w-3.5 h-3.5 text-gold-light" />
-                  <span>Kakrot, Sarai Alamgir</span>
-                </div>
-
-                {/* Real Footage Indicator */}
-                <div className="absolute top-4 right-4 bg-gold/90 text-white rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider shadow">
-                  Real Venue
-                </div>
-
-                {/* Bottom caption */}
-                <figcaption className="absolute left-5 right-5 bottom-5 text-white">
-                  <span className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-light">
-                    The Venue
-                  </span>
-                  <span className="block font-display text-lg sm:text-xl text-white font-medium">
-                    Illuminated facade and entrance at night
-                  </span>
-                </figcaption>
-              </figure>
+              )}
+              <div aria-hidden="true" className="absolute inset-0 rounded-t-[999px] ring-1 ring-inset ring-white/15" />
+              <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-espresso/70 to-transparent" />
+            </div>
+            {/* Offset outline frame for depth */}
+            <div
+              aria-hidden="true"
+              className="absolute -inset-3 -z-10 rounded-t-[999px] rounded-b-3xl border border-gold-light/25"
+            />
+            <div
+              data-parallax="0.14"
+              className="absolute -left-10 bottom-10 w-60 rounded-2xl border border-white/15 bg-espresso/70 p-4 shadow-frame backdrop-blur-md"
+            >
+              <p className="text-eyebrow font-semibold uppercase text-gold-light">Filmed at the venue</p>
+              <p className="mt-1.5 font-display text-lg leading-snug text-white">Stage décor, set for the celebration</p>
             </div>
           </div>
         </div>
       </div>
+
+      {playVideos && (
+        <button
+          type="button"
+          onClick={() => setPaused((p) => !p)}
+          aria-pressed={paused}
+          aria-label={paused ? "Play background video" : "Pause background video"}
+          className="absolute right-4 top-[84px] z-10 grid h-11 w-11 place-items-center rounded-full border border-white/25 bg-espresso/40 text-white/85 backdrop-blur-md transition-colors hover:bg-espresso/70 sm:right-8 lg:bottom-8 lg:top-auto"
+        >
+          <Icon name={paused ? "play" : "pause"} className="h-4 w-4" />
+        </button>
+      )}
+
+      <a
+        href="#about"
+        className="absolute bottom-8 left-1/2 hidden -translate-x-1/2 flex-col items-center gap-2 text-[0.6875rem] font-semibold uppercase tracking-[0.3em] text-white/60 transition-colors hover:text-white [@media(min-width:1024px)_and_(min-height:820px)]:flex"
+      >
+        Discover
+        <span aria-hidden="true" className="h-10 w-px bg-gradient-to-b from-white/70 to-transparent" />
+      </a>
     </section>
   );
 }

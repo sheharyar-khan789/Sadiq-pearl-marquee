@@ -9,6 +9,16 @@
 //   PLACEHOLDER -> safe default, easy to edit, not presented as verified fact
 // ============================================================================
 
+// PLACEHOLDER — the production domain is UNRESOLVED (Phase 0 audit P0-1: this
+// host does not currently resolve). It is kept in this one place so metadata,
+// canonical URLs, sitemap, robots and structured data all change together.
+// Do not replace it with a guess; update it once the client confirms the domain.
+// Phase 10: the real domain can be set at build time with NEXT_PUBLIC_SITE_URL
+// (e.g. "https://example.com", no trailing slash) without editing code.
+const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
+export const siteUrl =
+  configuredSiteUrl && /^https:\/\/[a-z0-9.-]+$/i.test(configuredSiteUrl) ? configuredSiteUrl : "https://www.sadiqpearlmarquee.com";
+
 export interface PhoneEntry {
   display: string;
   href: string;
@@ -86,18 +96,8 @@ export const venueFeatures = [
   "Free parking lot",
 ];
 
-// PLACEHOLDER — editable event-type options shown in the booking form.
-// Remove or rename any option that doesn't apply once the client confirms.
-export const eventTypeOptions = [
-  "Wedding (Shadi)",
-  "Nikkah",
-  "Mehndi",
-  "Barat",
-  "Walima",
-  "Engagement",
-  "Family Gathering",
-  "Other",
-];
+// Event types for the WhatsApp inquiry form come from the stored business
+// configuration (Admin → Settings), via /api/public/event-types (Phase 8).
 
 // CONFIRMED session names (Lunch / Dinner). Timings are NOT published because they are unconfirmed.
 // PLACEHOLDER — session options, matches confirmed "Lunch"/"Dinner" dining options
@@ -119,7 +119,13 @@ export const guestOptions = [
 // ----------------------------------------------------------------------------
 export const media = {
   logo: "/images/logo.jpg",
-  hero: "/images/hero/hero-primary.jpg", // also the poster for the hero video
-  heroVideo: "/videos/hero-exterior.mp4",
+  hero: "/images/hero/hero-primary.jpg", // night facade still: desktop hero background
+  // Real stage setup filmed at the venue (supplied 2026-09-29), re-encoded as a
+  // seamless forward/reverse loop. Portrait 9:16: full-bleed hero film on phones,
+  // arch-framed foreground film on desktop. One video per device.
+  heroStageVideo: "/videos/stage-rose-arch.mp4",
+  heroStagePoster: "/videos/stage-rose-arch-poster.jpg",
   daytimeFacade: "/images/exterior/exterior-daytime-facade.jpg",
+  aerialVideo: "/videos/exterior-aerial.mp4",
+  aerialPoster: "/videos/exterior-aerial-poster.jpg",
 } as const;

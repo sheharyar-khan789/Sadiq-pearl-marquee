@@ -1,0 +1,180 @@
+rules_version = '2';
+
+// Sadiq Pearl Marquee — Cloud Firestore Security Rules (Phase 2; bookings 3; change requests 4; admin audit 5; business config 6; payments & quotations 7; event operations 8; notifications 9; reviews 10).
+//
+// Principles:
+//  * Deny by default. Only collections matched below are reachable; everything
+//    else (future bookings, payments, etc.) stays closed until its own rules
+//    are written in the phase that introduces it.
+//  * A customer can read and write only their own users/{uid} document.
+//  * Roles are NEVER stored in or read from Firestore documents. The Super
+//    Admin is identified by a custom claim (request.auth.token.role) that only
+//    server-side code with Admin credentials can set.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isSuperAdmin() {
+      return signedIn()
+        && request.auth.token.role == 'super_admin'
+        && request.auth.token.email_verified == true;
+    }
+
+    // Optional string field: absent, or a string within the size limit.
+    function optionalString(data, field, maxSize) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxSize);
+    }
+
+    // Optional https URL (never javascript:/data: etc., in case it is ever rendered).
+    function optionalHttpsUrl(data, field) {
+      return !(field in data)
+        || (data[field] is string && data[field].size() <= 2048 && data[field].matches('https://[^\\s]+'));
+    }
+
+    function validProfileFields(data) {
+      return optionalString(data, 'name', 100)
+        && optionalHttpsUrl(data, 'photoURL')
+        && data.emailVerified == request.auth.token.email_verified
+        && data.updatedAt == request.time;
+    }
+
+    match /users/{uid} {
+      // Own profile only. The Super Admin may read (not write) profiles.
+      allow get: if isOwner(uid) || isSuperAdmin();
+
+      // Listing all customers is not allowed from the browser. Future admin
+      // tooling will list users server-side with the Admin SDK.
+      allow list: if false;
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(
+             ['uid', 'email', 'name', 'photoURL', 'authProvider', 'emailVerified', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(
+             ['uid', 'email', 'authProvider', 'emailVerified', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.authProvider in ['password', 'google.com']
+        && request.resource.data.authProvider == request.auth.token.firebase.sign_in_provider
+        && request.resource.data.createdAt == request.time
+        && validProfileFields(request.resource.data);
+
+      // Only these fields may change; uid, email, authProvider and createdAt are
+      // immutable. `phone` (Phase 4) is written only by the server profile API.
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['name', 'photoURL', 'emailVerified', 'updatedAt'])
+        && validProfileFields(request.resource.data);
+
+      // Account deletion will be handled server-side in a later phase.
+      allow delete: if false;
+    }
+
+    // Bookings and slot locks (Phase 3) are created and changed ONLY by server
+    // code with the Admin SDK, inside transactions that enforce availability,
+    // ownership, status rules and server-side pricing. The Admin SDK is not
+    // subject to these rules. Browsers get no direct access at all, so a
+    // customer cannot create, read, change or delete a booking or a slot lock
+    // (e.g. mark a booking confirmed, change amounts, or free someone's slot).
+    match /bookings/{bookingId} {
+      allow read, write: if false;
+    }
+
+    match /slotLocks/{slotKey} {
+      allow read, write: if false;
+    }
+
+    // Customer change requests (Phase 4): modification / cancellation requests
+    // are created ONLY by /api/account/bookings/{id}/requests (Admin SDK), which
+    // derives the customer from the verified session and checks ownership.
+    // Browsers cannot read or write them directly.
+    match /bookingRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    // Admin audit trail (Phase 5): written only by admin API routes (Admin SDK),
+    // in the same transaction as each admin change. Nobody reads or writes it
+    // from a browser -- not even the Super Admin, whose panel reads it on the
+    // server after verifying the super_admin claim.
+    match /adminAudit/{auditId} {
+      allow read, write: if false;
+    }
+
+    // Business configuration (Phase 6): hall, slots, rules, event types,
+    // services, menus, packages, prices and policies. Written only by the
+    // Super Admin settings API (Admin SDK, validated, audited). Public pages
+    // receive the active parts through server code, so browsers never read or
+    // write this document directly (no price tampering, no hidden drafts).
+    match /businessConfig/{docId} {
+      allow read, write: if false;
+    }
+
+    // Payments, quotations and document-number counters (Phase 7). Recorded,
+    // voided, issued and numbered ONLY by the Super Admin APIs (Admin SDK) in
+    // transactions that check the balance and write the audit record. Customers
+    // see their own receipts and issued quotations through server pages / PDF
+    // routes that verify ownership; browsers never read or write these
+    // directly (no fake payments, no edited amounts, no reused numbers).
+    match /payments/{paymentId} {
+      allow read, write: if false;
+    }
+
+    match /quotations/{quotationId} {
+      allow read, write: if false;
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    // Event operations (Phase 8): operational status, checklists, internal
+    // notes, vendors (with their phone numbers) and vendor assignments. Read
+    // and written ONLY by Super Admin server code (Admin SDK) after verifying
+    // the super_admin claim; every change is audited. Customers and visitors
+    // have no access at all (internal data, vendor contact details).
+    match /eventOperations/{bookingId} {
+      allow read, write: if false;
+    }
+
+    match /vendors/{vendorId} {
+      allow read, write: if false;
+    }
+
+    match /vendorAssignments/{assignmentId} {
+      allow read, write: if false;
+    }
+
+    // Customer notifications (Phase 9). Created ONLY by server code, inside the
+    // same transaction as the change they describe. A signed-in customer may
+    // read their OWN notifications (the portal itself reads them on the server);
+    // nobody can create, edit, re-assign or delete one from a browser —
+    // marking as read goes through /api/account/notifications, which checks
+    // ownership from the session.
+    match /notifications/{notificationId} {
+      allow get, list: if signedIn() && resource.data.customerId == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
+    // Staff-initiated communication records (manual WhatsApp). Admin-only, via
+    // server code; never readable or writable from a browser.
+    match /communications/{communicationId} {
+      allow read, write: if false;
+    }
+
+    // Guest reviews (Phase 10). Written ONLY by server code: customers submit
+    // through /api/account/bookings/{id}/review (ownership + completed-event
+    // check), the Super Admin moderates through /api/admin/reviews/{id}.
+    // Public pages read approved reviews on the server. No browser access, so
+    // nobody can self-approve, edit another review or inflate ratings.
+    match /reviews/{reviewId} {
+      allow read, write: if false;
+    }
+  }
+}

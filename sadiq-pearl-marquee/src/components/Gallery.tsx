@@ -4,331 +4,236 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  categoryLabel,
   galleryCategories,
   galleryItems,
   type GalleryCategory,
-  type GalleryItem,
 } from "@/data/gallery";
 import { getWhatsAppUrl } from "@/lib/whatsapp";
 import SectionHead from "./Section";
-import Icon, { WhatsAppGlyph } from "./Icon";
 import { useDialog } from "./useDialog";
+import Icon, { WhatsAppGlyph } from "./Icon";
 
-interface GalleryProps {
-  isDedicatedPage?: boolean;
-}
+/**
+ * Masonry gallery that keeps every photo at its true ratio (no cropping),
+ * with category filters (full page) and an accessible lightbox.
+ */
+export default function Gallery({ variant = "home" }: { variant?: "home" | "page" }) {
+  const isPage = variant === "page";
+  const [category, setCategory] = useState<GalleryCategory>("all");
+  const [active, setActive] = useState<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-export default function Gallery({ isDedicatedPage = false }: GalleryProps) {
-  const [selectedCategory, setSelectedCategory] = useState<GalleryCategory>("all");
-  const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
+  const items = useMemo(() => {
+    if (!isPage) return galleryItems.filter((i) => i.featured);
+    return category === "all" ? galleryItems : galleryItems.filter((i) => i.category === category);
+  }, [isPage, category]);
 
-  // Filter items based on active category
-  const filteredItems = useMemo(() => {
-    if (selectedCategory === "all") {
-      // On homepage, show the top 12 curated highlights; on dedicated page, show all 26
-      return isDedicatedPage ? galleryItems : galleryItems.slice(0, 12);
-    }
-    return galleryItems.filter((item) => item.category === selectedCategory);
-  }, [selectedCategory, isDedicatedPage]);
-
-  // Lightbox handlers
-  const isLightboxOpen = activeItemIndex !== null;
-  const closeLightbox = useCallback(() => setActiveItemIndex(null), []);
-  const closeRef = useDialog(isLightboxOpen, closeLightbox);
-
-  const stepLightbox = useCallback(
-    (direction: number) => {
-      setActiveItemIndex((current) => {
-        if (current === null) return null;
-        return (current + direction + filteredItems.length) % filteredItems.length;
-      });
-    },
-    [filteredItems.length]
+  const close = useCallback(() => setActive(null), []);
+  const closeRef = useDialog(active !== null, close, dialogRef);
+  const step = useCallback(
+    (d: number) => setActive((c) => (c === null ? null : (c + d + items.length) % items.length)),
+    [items.length]
   );
 
-  // Keyboard navigation for lightbox
   useEffect(() => {
-    if (activeItemIndex === null) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") stepLightbox(1);
-      if (e.key === "ArrowLeft") stepLightbox(-1);
+    if (active === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") step(1);
+      if (e.key === "ArrowLeft") step(-1);
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeItemIndex, stepLightbox]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, step]);
 
-  // Touch swipe support for mobile
-  const touchStartXRef = useRef<number | null>(null);
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartXRef.current = e.touches[0].clientX;
-  };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchEndX - touchStartXRef.current;
-    if (Math.abs(diff) > 40) {
-      if (diff < 0) stepLightbox(1); // Swipe left -> Next
-      else stepLightbox(-1); // Swipe right -> Prev
-    }
-    touchStartXRef.current = null;
-  };
+  const touchX = useRef<number | null>(null);
+  const current = active !== null ? items[active] : null;
 
-  const currentItem: GalleryItem | null =
-    activeItemIndex !== null ? filteredItems[activeItemIndex] : null;
+  const grid = (
+    <ul className="columns-2 gap-3 sm:columns-3 sm:gap-5 lg:columns-4">
+      {items.map((item, i) => (
+        <li key={item.id} className="mb-3 break-inside-avoid sm:mb-5">
+          <div data-reveal data-reveal-delay={(i % 4) * 70}>
+            <button
+              type="button"
+              onClick={() => setActive(i)}
+              aria-haspopup="dialog"
+              aria-label={`Open photo: ${item.title}`}
+              className="group relative block w-full overflow-hidden rounded-xl bg-surface-high sm:rounded-2xl"
+            >
+              <Image
+                src={item.image}
+                alt={`${item.title} — ${item.caption}`}
+                width={item.width}
+                height={item.height}
+                sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+                className="h-auto w-full transition-transform duration-[1200ms] ease-elegant group-hover:scale-[1.04]"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-espresso/80 via-espresso/0 to-transparent p-3 text-left opacity-0 transition-opacity duration-500 group-hover:opacity-100 group-focus-visible:opacity-100 sm:p-4 [@media(hover:none)]:opacity-100"
+              >
+                <span className="hidden text-eyebrow font-semibold uppercase text-gold-light sm:block">
+                  {categoryLabel[item.category]}
+                </span>
+                <span className="mt-1 font-display text-base leading-tight text-white sm:text-lg">{item.title}</span>
+              </span>
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
 
   return (
     <section
       id="gallery"
-      className={`py-16 md:py-24 scroll-mt-20 border-b border-line/40 ${
-        isDedicatedPage ? "bg-surface" : "bg-surface-low"
-      }`}
+      aria-labelledby={isPage ? undefined : "gallery-title"}
+      aria-label={isPage ? "Photo gallery" : undefined}
+      className={isPage ? "pb-20 sm:pb-28" : "bg-surface py-20 sm:py-28 lg:py-36"}
     >
-      <div className="max-w-content mx-auto container-px">
-        {/* Section Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10 sm:mb-12">
-          <SectionHead
-            eyebrow={isDedicatedPage ? "Complete Venue Gallery" : "Real Photo Gallery"}
-            title="Moments &amp; Spaces Inside Sadiq Pearl"
-            intro="Explore genuine photographs of our stage setups, crystal chandelier halls, floral arches, and banquet table arrangements on Rashidpur–Orangabad Road."
-          />
-          <div className="lg:mb-14 flex items-center gap-3 shrink-0">
-            <a
-              href={getWhatsAppUrl("Assalam o Alaikum, I saw your venue gallery and would like to ask about stage and hall setups for an upcoming event.")}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Inquire on WhatsApp about decor setups: 0345 5673921"
-              className="inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-11 px-5 rounded transition-all shadow-sm active:scale-95"
-            >
-              <WhatsAppGlyph className="w-4 h-4 fill-current" />
-              <span>Inquire About Setups</span>
-            </a>
-            {!isDedicatedPage && (
-              <Link
-                href="/gallery"
-                className="inline-flex items-center gap-2 h-11 px-4 rounded border border-line hover:border-gold text-ink font-semibold text-xs sm:text-sm transition-colors"
-              >
-                <span>Full Archive</span>
-                <Icon name="arrow" className="w-3.5 h-3.5 text-gold" />
+      <div className="container-px mx-auto max-w-content">
+        {!isPage && (
+          <div className="mb-12 flex flex-col gap-8 lg:mb-16 lg:flex-row lg:items-end lg:justify-between">
+            <SectionHead
+              id="gallery-title"
+              eyebrow="Gallery"
+              title={
+                <>
+                  Moments &amp; spaces, <em className="text-gold">as they are</em>
+                </>
+              }
+              intro="Real photographs of stage setups, chandelier halls, floral arches and dining at Sadiq Pearl Marquee."
+            />
+            <div data-reveal data-reveal-delay="120" className="hidden sm:block">
+              <Link href="/gallery" className="btn btn-outline">
+                View all {galleryItems.length} photos
+                <Icon name="arrow" className="h-4 w-4" />
               </Link>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Category Filter Pills */}
-        <div
-          role="tablist"
-          aria-label="Gallery category filters"
-          className="flex flex-wrap gap-2 sm:gap-2.5 mb-8 sm:mb-10"
-        >
-          {galleryCategories.map((cat) => {
-            const count =
-              cat.key === "all"
-                ? galleryItems.length
-                : galleryItems.filter((i) => i.category === cat.key).length;
-
-            return (
-              <button
-                key={cat.key}
-                role="tab"
-                aria-selected={selectedCategory === cat.key}
-                onClick={() => {
-                  setSelectedCategory(cat.key);
-                  setActiveItemIndex(null);
-                }}
-                className={`min-h-[44px] px-4 sm:px-5 rounded-full text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 ${
-                  selectedCategory === cat.key
-                    ? "bg-gold text-white shadow-sm ring-2 ring-gold/20"
-                    : "bg-surface border border-line text-ink-soft hover:border-gold hover:text-gold"
-                }`}
-              >
-                <span>{cat.label}</span>
-                <span
-                  className={`text-[11px] px-1.5 py-0.5 rounded-full ${
-                    selectedCategory === cat.key
-                      ? "bg-white/20 text-white"
-                      : "bg-surface-mid text-ink-muted"
+        {isPage && (
+          <div
+            role="group"
+            aria-label="Filter photos by category"
+            className="no-scrollbar -mx-5 mb-8 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex-wrap sm:px-0"
+          >
+            {galleryCategories.map((c) => {
+              const count =
+                c.key === "all" ? galleryItems.length : galleryItems.filter((i) => i.category === c.key).length;
+              const selected = category === c.key;
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setCategory(c.key);
+                    setActive(null);
+                  }}
+                  className={`inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors ${
+                    selected
+                      ? "border-espresso bg-espresso text-surface"
+                      : "border-line-strong/50 bg-surface text-ink-soft hover:border-ink/50 hover:text-ink"
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Editorial Asymmetric Photo Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
-          {filteredItems.map((item, index) => {
-            // Apply editorial spans for natural visual hierarchy
-            const isHeroItem = index === 0 && selectedCategory === "all";
-            const isWideItem = (index === 4 || index === 9) && selectedCategory === "all";
-
-            return (
-              <article
-                key={item.id}
-                className={`group relative overflow-hidden rounded-2xl bg-surface-high border border-line/70 hover:border-gold/60 transition-all duration-300 shadow-sm hover:shadow-md ${
-                  isHeroItem
-                    ? "sm:col-span-2 sm:row-span-2 aspect-[4/3] sm:aspect-[1/1] lg:aspect-[4/3]"
-                    : isWideItem
-                    ? "sm:col-span-2 aspect-[16/10]"
-                    : item.aspect === "portrait"
-                    ? "aspect-[4/5]"
-                    : "aspect-[16/11]"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveItemIndex(index)}
-                  className="w-full h-full block text-left relative focus-visible:ring-4 focus-visible:ring-gold/60"
-                  aria-label={`View full photo: ${item.title}`}
-                >
-                  <Image
-                    src={item.image}
-                    alt={item.title}
-                    fill
-                    sizes={
-                      isHeroItem
-                        ? "(min-width: 1024px) 50vw, 100vw"
-                        : "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-                    }
-                    className="object-cover transition-transform duration-700 ease-elegant group-hover:scale-105"
-                  />
-
-                  {/* Gradient Overlay for Text Readability */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-night/85 via-night/20 to-transparent opacity-80 group-hover:opacity-95 transition-opacity" />
-
-                  {/* Expand icon indicator on hover/focus */}
-                  <div className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-night/60 backdrop-blur-md text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Icon name="expand" className="w-4 h-4 text-gold-light" />
-                  </div>
-
-                  {/* Caption & Metadata */}
-                  <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-white">
-                    <span className="text-[10px] uppercase tracking-widest text-gold-light font-semibold block mb-1">
-                      {item.category === "interior"
-                        ? "Hall & Aisles"
-                        : item.category === "decoration"
-                        ? "Stage & Florals"
-                        : item.category === "exterior"
-                        ? "Exterior Frontage"
-                        : "Dining Course"}
-                    </span>
-                    <h3 className="font-display text-base sm:text-lg font-medium leading-snug">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-white/80 line-clamp-1 mt-1 font-body">
-                      {item.caption}
-                    </p>
-                  </div>
+                  {c.label}
+                  <span className={`text-xs ${selected ? "text-gold-light" : "text-ink-muted"}`}>{count}</span>
                 </button>
-              </article>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Dedicated Page Bottom WhatsApp CTA or Homepage Full Gallery Trigger */}
-        {!isDedicatedPage && galleryItems.length > 12 && (
-          <div className="mt-12 text-center">
-            <Link
-              href="/gallery"
-              className="inline-flex items-center gap-2.5 bg-surface border border-gold/70 hover:border-gold text-gold hover:bg-gold hover:text-white font-semibold text-sm h-12 px-7 rounded-xl transition-all shadow-sm"
-            >
-              <span>Explore All {galleryItems.length} Venue Photos</span>
-              <Icon name="arrow" className="w-4 h-4" />
+        {grid}
+
+        {!isPage && (
+          <div className="mt-10 text-center sm:hidden">
+            <Link href="/gallery" className="btn btn-outline w-full">
+              View all {galleryItems.length} photos
             </Link>
           </div>
         )}
       </div>
 
-      {/* FULLSCREEN LIGHTBOX DIALOG */}
-      {isLightboxOpen && currentItem && (
+      {current && active !== null && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={`Photo preview: ${currentItem.title}`}
-          className="fixed inset-0 z-[80] bg-night/95 backdrop-blur-md flex flex-col justify-between"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
+          aria-label={`Photo ${active + 1} of ${items.length}: ${current.title}`}
+          className="fixed inset-0 z-[80] flex flex-col bg-espresso/95 text-white backdrop-blur-md"
+          onTouchStart={(e) => {
+            touchX.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            if (touchX.current === null) return;
+            const dx = e.changedTouches[0].clientX - touchX.current;
+            if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+            touchX.current = null;
+          }}
         >
-          {/* Top Bar */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 text-white">
-            <div className="leading-tight">
-              <span className="text-xs text-gold-light uppercase tracking-wider block">
-                Photo {activeItemIndex + 1} of {filteredItems.length}
-              </span>
-              <h2 className="font-display text-base sm:text-lg font-medium">
-                {currentItem.title}
-              </h2>
-            </div>
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <p className="text-sm tabular-nums text-white/70">
+              {active + 1} / {items.length}
+            </p>
             <button
               ref={closeRef}
               type="button"
-              onClick={closeLightbox}
-              aria-label="Close photo preview"
-              className="w-11 h-11 grid place-items-center rounded-full hover:bg-white/10 text-white transition-colors"
+              onClick={close}
+              aria-label="Close photo"
+              className="grid h-11 w-11 place-items-center rounded-full border border-white/20 hover:bg-white/10"
             >
-              <Icon name="close" className="w-6 h-6" />
+              <Icon name="close" className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Central Image Viewport */}
-          <div className="relative flex-1 min-h-0 w-full p-2 sm:p-6 flex items-center justify-center">
-            <div className="relative w-full h-full max-h-[82vh]">
-              <Image
-                key={currentItem.id}
-                src={currentItem.image}
-                alt={currentItem.title}
-                fill
-                sizes="100vw"
-                className="object-contain"
-                priority
-              />
-            </div>
-
-            {/* Navigation Arrows */}
+          <div className="relative min-h-0 flex-1">
+            <Image
+              key={current.id}
+              src={current.image}
+              alt={current.title}
+              fill
+              sizes="100vw"
+              className="animate-fade-in object-contain px-2 sm:px-20"
+            />
             <button
               type="button"
-              onClick={() => stepLightbox(-1)}
+              onClick={() => step(-1)}
               aria-label="Previous photo"
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center rounded-full bg-black/60 text-white hover:bg-gold transition-colors focus-visible:ring-2 focus-visible:ring-gold"
+              className="absolute left-3 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white hover:bg-black/70"
             >
-              <Icon name="prev" className="w-5 h-5" />
+              <Icon name="prev" className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={() => stepLightbox(1)}
+              onClick={() => step(1)}
               aria-label="Next photo"
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center rounded-full bg-black/60 text-white hover:bg-gold transition-colors focus-visible:ring-2 focus-visible:ring-gold"
+              className="absolute right-3 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white hover:bg-black/70"
             >
-              <Icon name="next" className="w-5 h-5" />
+              <Icon name="next" className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Bottom Bar: Caption & WhatsApp Inquiry */}
-          <div className="p-4 border-t border-white/10 bg-night/90 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-            <p className="text-xs sm:text-sm text-white/80 max-w-xl">
-              {currentItem.caption}
-            </p>
-            <div className="flex items-center gap-3">
-              <a
-                href={getWhatsAppUrl(
-                  `Assalam o Alaikum, I am inquiring about this setup from your gallery: ${currentItem.title}.`
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-10 px-5 rounded transition-colors shadow"
-              >
-                <WhatsAppGlyph className="w-4 h-4 fill-current" />
-                <span>Inquire About This Setup</span>
-              </a>
-              <button
-                type="button"
-                onClick={closeLightbox}
-                className="inline-flex items-center justify-center text-xs text-white/70 hover:text-white px-3 py-2"
-              >
-                Close
-              </button>
+          <div className="flex flex-col gap-4 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-xl">
+              <p className="text-eyebrow font-semibold uppercase text-gold-light">{categoryLabel[current.category]}</p>
+              <h2 className="mt-1 font-display text-2xl leading-tight">{current.title}</h2>
+              <p className="mt-1 text-sm text-white/70">{current.caption}</p>
             </div>
+            <a
+              href={getWhatsAppUrl(
+                `Assalam o Alaikum, I am inquiring about this setup from your gallery: ${current.title}.`
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-accent btn-sm shrink-0"
+            >
+              <WhatsAppGlyph className="h-4 w-4" />
+              Ask about this
+            </a>
           </div>
         </div>
       )}

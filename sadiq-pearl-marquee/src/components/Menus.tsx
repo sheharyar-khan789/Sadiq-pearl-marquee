@@ -1,480 +1,310 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
-import {
-  menuPdf,
-  menuSheets,
-  mehndiMenus,
-  sweetsAndSides,
-  weddingMenus,
-  type MenuSet,
-} from "@/data/menu";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { menuPdf, menuSheets, mehndiMenus, sweetsAndSides, weddingMenus, type MenuSet } from "@/data/menu";
 import { getWhatsAppUrl } from "@/lib/whatsapp";
-import SectionHead from "./Section";
 import { useBooking } from "./BookingContext";
+import SectionHead from "./Section";
 import { useDialog } from "./useDialog";
 import Icon, { WhatsAppGlyph } from "./Icon";
 
-type MainTab = "sheets" | "wedding" | "mehndi" | "sweets";
+// Printed on every wedding menu (see data/menu.ts); listed once for readability.
+const WEDDING_INCLUDES = ["Roghni Naan", "Green Salad", "Raita", "Soft Drink", "Mineral Water"];
+
+const tabs = [
+  { key: "wedding", label: "Wedding menus", count: weddingMenus.length },
+  { key: "mehndi", label: "Mehndi menus", count: mehndiMenus.length },
+  { key: "sweets", label: "Desserts & drinks", count: sweetsAndSides.length },
+  { key: "card", label: "Printed card", count: menuSheets.length },
+] as const;
+type TabKey = (typeof tabs)[number]["key"];
 
 export default function Menus() {
-  const [activeTab, setActiveTab] = useState<MainTab>("sheets");
-  const [selectedSheetIndex, setSelectedSheetIndex] = useState(0);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [active, setActive] = useState<TabKey>("wedding");
+  const [lightbox, setLightbox] = useState<number | null>(null);
   const { openTerms } = useBooking();
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  const isLightboxOpen = lightboxIndex !== null;
-  const closeLightbox = useCallback(() => setLightboxIndex(null), []);
-  const closeRef = useDialog(isLightboxOpen, closeLightbox);
-
-  const stepLightbox = useCallback(
-    (direction: number) => {
-      setLightboxIndex((curr) => {
-        if (curr === null) return null;
-        return (curr + direction + menuSheets.length) % menuSheets.length;
-      });
-    },
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const closeRef = useDialog(lightbox !== null, closeLightbox, dialogRef);
+  const step = useCallback(
+    (d: number) => setLightbox((c) => (c === null ? null : (c + d + menuSheets.length) % menuSheets.length)),
     []
   );
 
   useEffect(() => {
-    if (lightboxIndex === null) return;
+    if (lightbox === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") stepLightbox(1);
-      if (e.key === "ArrowLeft") stepLightbox(-1);
+      if (e.key === "ArrowRight") step(1);
+      if (e.key === "ArrowLeft") step(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxIndex, stepLightbox]);
+  }, [lightbox, step]);
 
-  const generalMenuWaUrl = getWhatsAppUrl(
-    "Assalam o Alaikum, I would like to inquire about the menu options and per-head rates at Sadiq Pearl Marquee."
-  );
+  const onTabKey = (e: React.KeyboardEvent, index: number) => {
+    const last = tabs.length - 1;
+    const next =
+      e.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : e.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    setActive(tabs[next].key);
+    tabRefs.current[next]?.focus();
+  };
 
-  const activeSheet = menuSheets[selectedSheetIndex];
-  const currentLightboxSheet =
-    lightboxIndex !== null ? menuSheets[lightboxIndex] : null;
+  const sheet = lightbox !== null ? menuSheets[lightbox] : null;
 
   return (
-    <section id="menus" className="py-16 md:py-24 scroll-mt-20 border-b border-line/40 bg-surface">
-      <div className="max-w-content mx-auto container-px">
-        {/* Section Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-10 sm:mb-12">
+    <section id="menus" aria-labelledby="menus-title" className="bg-surface-low py-20 sm:py-28 lg:py-36">
+      <div className="container-px mx-auto max-w-content">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <SectionHead
-            eyebrow="Catering &amp; Menus"
-            title="Authentic Pakistani Catering &amp; Menus"
-            intro="Carefully prepared wedding and mehndi menus directly from our official printed menu card. Each menu is paired with fresh roghni naan, fresh salad, raita, and drinks."
+            id="menus-title"
+            eyebrow="Catering & Menus"
+            title={
+              <>
+                Traditional Pakistani <em className="text-gold">catering</em>
+              </>
+            }
+            intro="Wedding and mehndi menus from our printed menu card, prepared in-house and served at your tables. Ask us for current per-head rates."
           />
-          <div className="lg:mb-14 flex flex-wrap items-center gap-3 shrink-0">
+          <div data-reveal data-reveal-delay="120" className="flex flex-wrap gap-3">
             <a
-              href={generalMenuWaUrl}
+              href={getWhatsAppUrl(
+                "Assalam o Alaikum, I would like to inquire about the menu options and per-head rates at Sadiq Pearl Marquee."
+              )}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Inquire about menu per-head rates on WhatsApp: 0345 5673921"
-              className="inline-flex items-center gap-2.5 bg-gold hover:bg-gold-container text-white font-semibold text-sm h-12 px-6 rounded transition-all shadow-sm active:scale-95"
+              className="btn btn-primary"
             >
-              <WhatsAppGlyph className="w-4 h-4 fill-current" />
-              <span>Ask About Menu Rates</span>
+              <WhatsAppGlyph className="h-[18px] w-[18px]" />
+              Ask for menu rates
             </a>
-            <a
-              href={menuPdf}
-              download
-              aria-label="Download Sadiq Pearl Marquee menu card PDF"
-              className="inline-flex items-center gap-2 h-12 px-5 rounded border border-line hover:border-gold text-ink font-semibold text-sm transition-colors"
-            >
-              <Icon name="download" className="w-4 h-4 text-gold" />
-              <span>Download PDF</span>
+            <a href={menuPdf} download className="btn btn-outline">
+              <Icon name="download" className="h-4 w-4" />
+              Menu card (PDF)
             </a>
           </div>
         </div>
 
-        {/* Category Navigation Tabs */}
+        {/* Tabs */}
         <div
           role="tablist"
-          aria-label="Menu format navigation"
-          className="flex flex-wrap gap-2.5 mb-10 border-b border-line/50 pb-4"
+          aria-label="Menu categories"
+          className="no-scrollbar -mx-5 mt-12 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex-wrap sm:px-0 lg:mt-14"
         >
-          <button
-            role="tab"
-            aria-selected={activeTab === "sheets"}
-            onClick={() => setActiveTab("sheets")}
-            className={`min-h-[44px] px-5 rounded-full text-xs sm:text-sm font-semibold transition-all ${
-              activeTab === "sheets"
-                ? "bg-gold text-white shadow-sm ring-2 ring-gold/20"
-                : "bg-surface-low border border-line text-ink-soft hover:border-gold hover:text-gold"
-            }`}
-          >
-            Original Printed Menu Cards (3)
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === "wedding"}
-            onClick={() => setActiveTab("wedding")}
-            className={`min-h-[44px] px-5 rounded-full text-xs sm:text-sm font-semibold transition-all ${
-              activeTab === "wedding"
-                ? "bg-gold text-white shadow-sm ring-2 ring-gold/20"
-                : "bg-surface-low border border-line text-ink-soft hover:border-gold hover:text-gold"
-            }`}
-          >
-            Wedding Menus (1 – 7)
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === "mehndi"}
-            onClick={() => setActiveTab("mehndi")}
-            className={`min-h-[44px] px-5 rounded-full text-xs sm:text-sm font-semibold transition-all ${
-              activeTab === "mehndi"
-                ? "bg-gold text-white shadow-sm ring-2 ring-gold/20"
-                : "bg-surface-low border border-line text-ink-soft hover:border-gold hover:text-gold"
-            }`}
-          >
-            Mehndi Menus (1 – 2)
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === "sweets"}
-            onClick={() => setActiveTab("sweets")}
-            className={`min-h-[44px] px-5 rounded-full text-xs sm:text-sm font-semibold transition-all ${
-              activeTab === "sweets"
-                ? "bg-gold text-white shadow-sm ring-2 ring-gold/20"
-                : "bg-surface-low border border-line text-ink-soft hover:border-gold hover:text-gold"
-            }`}
-          >
-            Desserts &amp; Drinks
-          </button>
+          {tabs.map((t, i) => {
+            const selected = active === t.key;
+            return (
+              <button
+                key={t.key}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
+                role="tab"
+                id={`menu-tab-${t.key}`}
+                aria-selected={selected}
+                aria-controls={`menu-panel-${t.key}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActive(t.key)}
+                onKeyDown={(e) => onTabKey(e, i)}
+                className={`inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors ${
+                  selected
+                    ? "border-espresso bg-espresso text-surface"
+                    : "border-line-strong/50 bg-surface text-ink-soft hover:border-ink/50 hover:text-ink"
+                }`}
+              >
+                {t.label}
+                <span className={`text-xs ${selected ? "text-gold-light" : "text-ink-muted"}`}>{t.count}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* TAB 1: ORIGINAL PRINTED MENU CARDS (GALLERY / STACKED VIEW) */}
-        {activeTab === "sheets" && (
-          <div className="space-y-10">
-            {/* Desktop & Tablet Curated Showcase */}
-            <div className="hidden md:grid lg:grid-cols-12 gap-8 items-start bg-surface-low rounded-2xl p-6 sm:p-8 border border-line/70 shadow-sm">
-              {/* Left Selector & Info */}
-              <div className="lg:col-span-5 space-y-6">
-                <div>
-                  <span className="text-xs uppercase tracking-widest text-gold font-semibold block mb-2">
-                    Official Document
-                  </span>
-                  <h3 className="font-display text-2xl sm:text-3xl text-ink font-semibold">
-                    Original Printed Menu
-                  </h3>
-                  <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-                    Review the exact printed cards provided by Sadiq Pearl Marquee,
-                    including Urdu dish titles, course arrangements, and verified banquet options.
-                  </p>
-                </div>
-
-                {/* Sheet Selection Pills */}
-                <div className="space-y-3" role="tablist" aria-label="Menu Card Pages">
-                  {menuSheets.map((sheet, index) => (
+        <div
+          role="tabpanel"
+          id={`menu-panel-${active}`}
+          aria-labelledby={`menu-tab-${active}`}
+          tabIndex={0}
+          className="mt-8 focus-visible:outline-offset-8"
+        >
+          {active === "wedding" && (
+            <>
+              <p className="mb-6 flex items-start gap-2 text-sm text-ink-soft">
+                <Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+                Every wedding menu includes {WEDDING_INCLUDES.slice(0, -1).join(", ").toLowerCase()} and{" "}
+                {WEDDING_INCLUDES[WEDDING_INCLUDES.length - 1].toLowerCase()}.
+              </p>
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {weddingMenus.map((m, i) => (
+                  <MenuCard key={m.id} menu={m} index={i} hideItems={WEDDING_INCLUDES} />
+                ))}
+                <li className="flex flex-col justify-between rounded-2xl bg-espresso p-6 text-white">
+                  <div>
+                    <p className="text-eyebrow font-semibold uppercase text-gold-light">Need help choosing?</p>
+                    <p className="mt-3 font-display text-[1.625rem] leading-tight">
+                      Ask for current per-head rates for any menu.
+                    </p>
+                  </div>
+                  <a
+                    href={getWhatsAppUrl(
+                      "Assalam o Alaikum, I would like help choosing a wedding menu and the current per-head rates."
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-accent btn-sm mt-6 self-start"
+                  >
+                    <WhatsAppGlyph className="h-4 w-4" />
+                    Ask on WhatsApp
+                  </a>
+                </li>
+              </ul>
+            </>
+          )}
+          {active === "mehndi" && (
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-4xl">
+              {mehndiMenus.map((m, i) => (
+                <MenuCard key={m.id} menu={m} index={i} />
+              ))}
+            </ul>
+          )}
+          {active === "sweets" && (
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {sweetsAndSides.map((m, i) => (
+                <MenuCard key={m.id} menu={m} index={i} plain />
+              ))}
+            </ul>
+          )}
+          {active === "card" && (
+            <>
+              <p className="mb-6 max-w-2xl text-sm text-ink-soft">
+                Photographs of the printed menu card, with Urdu dish names. Tap a sheet to enlarge it.
+              </p>
+              <ul className="no-scrollbar -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:gap-6 sm:overflow-visible sm:px-0">
+                {menuSheets.map((s, i) => (
+                  <li key={s.src} className="w-[72%] shrink-0 snap-center sm:w-auto">
                     <button
-                      key={sheet.src}
-                      role="tab"
-                      aria-selected={selectedSheetIndex === index}
-                      onClick={() => setSelectedSheetIndex(index)}
-                      className={`w-full text-left p-4 rounded-xl border transition-all flex items-center justify-between ${
-                        selectedSheetIndex === index
-                          ? "bg-surface border-gold shadow-sm ring-1 ring-gold/30"
-                          : "bg-surface/50 border-line hover:border-gold/50 text-ink-soft"
-                      }`}
+                      type="button"
+                      onClick={() => setLightbox(i)}
+                      aria-haspopup="dialog"
+                      className="group block w-full text-left"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-gold/10 text-gold text-xs font-semibold grid place-items-center">
-                          0{index + 1}
+                      <span className="relative block aspect-[9/16] overflow-hidden rounded-2xl bg-surface-high shadow-soft ring-1 ring-line">
+                        <Image
+                          src={s.src}
+                          alt={`Printed menu card, sheet ${i + 1}: ${s.title}`}
+                          fill
+                          sizes="(min-width: 640px) 30vw, 72vw"
+                          className="object-cover transition-transform duration-700 ease-elegant group-hover:scale-[1.03]"
+                        />
+                        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-espresso/80 px-3 py-1.5 text-xs font-medium text-white backdrop-blur">
+                          <Icon name="expand" className="h-3.5 w-3.5 text-gold-light" />
+                          Enlarge
                         </span>
-                        <div>
-                          <p className="text-sm font-semibold text-ink">
-                            Sheet {index + 1}
-                          </p>
-                          <p className="text-xs text-ink-muted">{sheet.title}</p>
-                        </div>
-                      </div>
-                      <Icon
-                        name="arrow"
-                        className={`w-4 h-4 transition-transform ${
-                          selectedSheetIndex === index
-                            ? "text-gold translate-x-1"
-                            : "text-ink-muted"
-                        }`}
-                      />
+                      </span>
+                      <span className="mt-3 block text-sm font-semibold text-ink">Sheet {i + 1}</span>
+                      <span className="block text-xs text-ink-muted">{s.title}</span>
                     </button>
-                  ))}
-                </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
 
-                <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setLightboxIndex(selectedSheetIndex)}
-                    className="inline-flex items-center justify-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-sm h-11 px-5 rounded transition-all shadow-sm"
-                  >
-                    <Icon name="expand" className="w-4 h-4" />
-                    <span>View Sheet Fullscreen</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openTerms}
-                    className="inline-flex items-center justify-center gap-2 border border-gold/70 text-gold hover:bg-gold/10 font-semibold text-sm h-11 px-5 rounded transition-colors"
-                  >
-                    <Icon name="doc" className="w-4 h-4" />
-                    <span>Read Booking Terms</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Right: Featured Sheet Display with Zoom Trigger */}
-              <div className="lg:col-span-7">
-                <div
-                  onClick={() => setLightboxIndex(selectedSheetIndex)}
-                  className="group relative cursor-pointer aspect-[9/14] sm:aspect-[9/13] max-w-lg mx-auto rounded-xl overflow-hidden shadow-lg border border-line/80 bg-night/5"
-                  title="Click to expand fullscreen"
-                >
-                  <Image
-                    src={activeSheet.src}
-                    alt={`Sadiq Pearl Marquee printed menu sheet: ${activeSheet.title}`}
-                    fill
-                    sizes="(min-width: 1024px) 50vw, 85vw"
-                    className="object-contain transition-transform duration-500 group-hover:scale-[1.02]"
-                  />
-                  <div className="absolute inset-0 bg-night/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="inline-flex items-center gap-2 bg-night/80 backdrop-blur-md text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg">
-                      <Icon name="expand" className="w-4 h-4" />
-                      <span>Click to view full resolution</span>
-                    </span>
-                  </div>
-                </div>
-                <p className="text-center text-xs text-ink-muted mt-3">
-                  Showing Sheet {selectedSheetIndex + 1} of {menuSheets.length}: {activeSheet.title}
-                </p>
-              </div>
-            </div>
-
-            {/* Mobile Stacked Gallery Presentation (No Overflow, Clean Touch Targets) */}
-            <div className="md:hidden space-y-6">
-              {menuSheets.map((sheet, index) => {
-                const sheetWaUrl = getWhatsAppUrl(
-                  `Assalam o Alaikum, I am looking at Menu Card Sheet ${index + 1} (${sheet.title}) and would like to ask about per-head rates.`
-                );
-
-                return (
-                  <div
-                    key={sheet.src}
-                    className="bg-surface-low rounded-2xl p-5 border border-line/70 shadow-sm space-y-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="inline-block text-[11px] uppercase tracking-wider font-semibold text-gold bg-gold/10 px-2.5 py-1 rounded">
-                        Sheet 0{index + 1}
-                      </span>
-                      <span className="text-xs text-ink-muted">
-                        Official Menu Card
-                      </span>
-                    </div>
-
-                    <h4 className="font-display text-lg text-ink font-semibold">
-                      {sheet.title}
-                    </h4>
-
-                    {/* Image Container with Expand Action */}
-                    <div
-                      onClick={() => setLightboxIndex(index)}
-                      className="relative aspect-[9/13] w-full rounded-xl overflow-hidden shadow-sm border border-line/80 bg-night/5 cursor-pointer"
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && setLightboxIndex(index)}
-                      aria-label={`View fullscreen: ${sheet.title}`}
-                    >
-                      <Image
-                        src={sheet.src}
-                        alt={`Sadiq Pearl Marquee menu card sheet: ${sheet.title}`}
-                        fill
-                        sizes="90vw"
-                        className="object-contain"
-                      />
-                      <div className="absolute bottom-3 right-3 bg-night/80 backdrop-blur-md text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow">
-                        <Icon name="expand" className="w-3.5 h-3.5 text-gold-light" />
-                        <span>Tap to enlarge</span>
-                      </div>
-                    </div>
-
-                    {/* Actions for this sheet */}
-                    <div className="pt-2 flex flex-col gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => setLightboxIndex(index)}
-                        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-surface border border-gold/70 text-gold font-semibold text-xs rounded-lg hover:bg-gold/10 transition-colors"
-                      >
-                        <Icon name="expand" className="w-4 h-4" />
-                        <span>View Fullscreen Lightbox</span>
-                      </button>
-                      <a
-                        href={sheetWaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs rounded-lg transition-colors"
-                      >
-                        <WhatsAppGlyph className="w-4 h-4 fill-current" />
-                        <span>Inquire About Sheet 0{index + 1}</span>
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: TRANSCRIBED WEDDING MENUS (1 – 7) */}
-        {activeTab === "wedding" && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {weddingMenus.map((menu) => (
-              <MenuCard key={menu.id} menu={menu} sheetNumber={menu.sheet} />
-            ))}
-          </div>
-        )}
-
-        {/* TAB 3: TRANSCRIBED MEHNDI MENUS (1 – 2) */}
-        {activeTab === "mehndi" && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-2 max-w-4xl mx-auto">
-            {mehndiMenus.map((menu) => (
-              <MenuCard key={menu.id} menu={menu} sheetNumber={menu.sheet} />
-            ))}
-          </div>
-        )}
-
-        {/* TAB 4: SWEETS, SALADS & DRINKS */}
-        {activeTab === "sweets" && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {sweetsAndSides.map((menu) => (
-              <MenuCard key={menu.id} menu={menu} />
-            ))}
-          </div>
-        )}
-
-        {/* Bottom Booking Terms Reference Banner */}
-        <div className="mt-14 p-6 sm:p-8 rounded-2xl bg-surface-low border border-line/70 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+        {/* Terms summary — every point is from the printed card */}
+        <div
+          data-reveal
+          className="mt-14 flex flex-col gap-6 rounded-3xl border border-line bg-surface p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between"
+        >
           <div>
-            <span className="text-xs uppercase tracking-widest text-gold font-semibold block mb-1">
-              Important Notice
-            </span>
-            <h4 className="font-display text-xl text-ink font-semibold">
-              Booking Terms &amp; Conditions Apply
-            </h4>
-            <p className="text-xs sm:text-sm text-ink-soft mt-1 leading-relaxed max-w-2xl">
-              Catering and decoration from outside are strictly prohibited. Minimum booking guidelines,
-              standard 5% service charge, and session guidelines are detailed on the printed card.
-            </p>
+            <p className="eyebrow">Good to know</p>
+            <ul className="mt-4 grid gap-x-8 gap-y-2 text-sm text-ink-soft sm:grid-cols-3">
+              <li className="flex gap-2">
+                <span className="text-gold">·</span> Rates are based on 300+ guests; an extra per-head charge applies below that
+              </li>
+              <li className="flex gap-2">
+                <span className="text-gold">·</span> Outside catering &amp; decoration not allowed
+              </li>
+              <li className="flex gap-2">
+                <span className="text-gold">·</span> 5% service charge applies
+              </li>
+            </ul>
           </div>
-          <div className="shrink-0 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={openTerms}
-              className="inline-flex items-center justify-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-11 px-5 rounded transition-all shadow-sm"
-            >
-              <Icon name="doc" className="w-4 h-4" />
-              <span>Read Booking Terms</span>
-            </button>
-          </div>
+          <button type="button" onClick={openTerms} aria-haspopup="dialog" className="btn btn-outline shrink-0">
+            <Icon name="doc" className="h-4 w-4" />
+            Read all booking terms
+          </button>
         </div>
       </div>
 
-      {/* FULLSCREEN LIGHTBOX FOR MENU CARDS */}
-      {isLightboxOpen && currentLightboxSheet && (
+      {/* Printed-card lightbox */}
+      {sheet && lightbox !== null && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={`Menu card preview: ${currentLightboxSheet.title}`}
-          className="fixed inset-0 z-[80] bg-night/95 backdrop-blur-md flex flex-col justify-between"
+          aria-label={`Menu card sheet ${lightbox + 1}: ${sheet.title}`}
+          className="fixed inset-0 z-[80] flex flex-col bg-espresso/95 text-white backdrop-blur-md"
         >
-          {/* Top Lightbox Bar */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 text-white">
-            <div className="leading-tight">
-              <span className="text-xs text-gold-light uppercase tracking-wider block">
-                Sheet {lightboxIndex + 1} of {menuSheets.length}
-              </span>
-              <p className="font-display text-base sm:text-lg font-medium">
-                {currentLightboxSheet.title}
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
+            <div>
+              <p className="text-eyebrow font-semibold uppercase text-gold-light">
+                Sheet {lightbox + 1} of {menuSheets.length}
               </p>
+              <p className="font-display text-lg">{sheet.title}</p>
             </div>
             <div className="flex items-center gap-2">
               <a
                 href={menuPdf}
                 download
-                aria-label="Download menu PDF"
-                className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
-                title="Download menu PDF"
+                aria-label="Download menu card PDF"
+                className="grid h-11 w-11 place-items-center rounded-full text-white/80 hover:bg-white/10"
               >
-                <Icon name="download" className="w-5 h-5" />
+                <Icon name="download" className="h-5 w-5" />
               </a>
               <button
                 ref={closeRef}
                 type="button"
                 onClick={closeLightbox}
-                aria-label="Close menu fullscreen preview"
-                className="w-10 h-10 grid place-items-center rounded-full hover:bg-white/10 text-white transition-colors"
+                aria-label="Close"
+                className="grid h-11 w-11 place-items-center rounded-full border border-white/20 hover:bg-white/10"
               >
-                <Icon name="close" className="w-6 h-6" />
+                <Icon name="close" className="h-5 w-5" />
               </button>
             </div>
           </div>
-
-          {/* Central High-Resolution Sheet View */}
-          <div className="relative flex-1 min-h-0 w-full p-2 sm:p-6 flex items-center justify-center">
-            <div className="relative w-full h-full max-h-[82vh] aspect-[9/13]">
-              <Image
-                key={currentLightboxSheet.src}
-                src={currentLightboxSheet.src}
-                alt={`High-resolution menu card: ${currentLightboxSheet.title}`}
-                fill
-                sizes="100vw"
-                className="object-contain"
-                priority
-              />
-            </div>
-
-            {/* Prev / Next Navigation Arrows */}
+          <div className="relative min-h-0 flex-1 p-3 sm:p-6">
+            <Image
+              key={sheet.src}
+              src={sheet.src}
+              alt={`Printed menu card, sheet ${lightbox + 1}: ${sheet.title}`}
+              fill
+              sizes="100vw"
+              className="object-contain p-3 sm:p-6"
+            />
             <button
               type="button"
-              onClick={() => stepLightbox(-1)}
-              aria-label="Previous menu sheet"
-              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center rounded-full bg-black/60 text-white hover:bg-gold transition-colors focus-visible:ring-2 focus-visible:ring-gold"
+              onClick={() => step(-1)}
+              aria-label="Previous sheet"
+              className="absolute left-3 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
             >
-              <Icon name="prev" className="w-5 h-5" />
+              <Icon name="prev" className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={() => stepLightbox(1)}
-              aria-label="Next menu sheet"
-              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 grid place-items-center rounded-full bg-black/60 text-white hover:bg-gold transition-colors focus-visible:ring-2 focus-visible:ring-gold"
+              onClick={() => step(1)}
+              aria-label="Next sheet"
+              className="absolute right-3 top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white hover:bg-black/70"
             >
-              <Icon name="next" className="w-5 h-5" />
+              <Icon name="next" className="h-5 w-5" />
             </button>
-          </div>
-
-          {/* Bottom Lightbox Controls */}
-          <div className="p-4 border-t border-white/10 bg-night/90 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-            <p className="text-xs text-white/70">
-              Printed on the official Sadiq Pearl Marquee card. Use WhatsApp to inquire about current rates.
-            </p>
-            <div className="flex items-center gap-3">
-              <a
-                href={getWhatsAppUrl(
-                  `Assalam o Alaikum, I am inquiring about per-head rates for Menu Sheet ${lightboxIndex + 1} (${currentLightboxSheet.title}).`
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-10 px-5 rounded transition-colors shadow"
-              >
-                <WhatsAppGlyph className="w-4 h-4 fill-current" />
-                <span>Inquire on WhatsApp</span>
-              </a>
-              <button
-                type="button"
-                onClick={closeLightbox}
-                className="inline-flex items-center justify-center text-xs text-white/80 hover:text-white px-3 py-2"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -482,62 +312,45 @@ export default function Menus() {
   );
 }
 
-/** Individual transcribed menu card component */
 function MenuCard({
   menu,
-  sheetNumber,
+  index,
+  hideItems,
+  plain,
 }: {
   menu: MenuSet;
-  sheetNumber?: number;
+  index: number;
+  hideItems?: string[];
+  plain?: boolean;
 }) {
-  const cardWaUrl = getWhatsAppUrl(
-    `Assalam o Alaikum, I would like to inquire about the per-head rate for ${menu.title} at Sadiq Pearl Marquee.`
-  );
-
+  const items = hideItems ? menu.items.filter((i) => !hideItems.includes(i)) : menu.items;
   return (
-    <article className="bg-surface rounded-2xl border border-line/70 hover:border-gold/60 p-6 flex flex-col justify-between shadow-sm transition-all duration-300 hover:shadow-md">
-      <div>
-        <div className="flex items-start justify-between gap-2 pb-3 mb-4 border-b border-line/60">
-          <div>
-            <h4 className="font-display text-xl text-ink font-semibold">
-              {menu.title}
-            </h4>
-            {sheetNumber && (
-              <span className="text-[10px] text-ink-muted uppercase tracking-wider block mt-0.5">
-                Printed on Sheet 0{sheetNumber}
-              </span>
-            )}
-          </div>
-          <span className="w-2 h-2 rounded-full bg-gold/60 mt-2 shrink-0" />
-        </div>
-
-        <ul className="space-y-2 text-sm text-ink-soft">
-          {menu.items.map((item, index) => (
-            <li
-              key={index}
-              className={`flex items-start gap-2 ${
-                index === 0 ? "font-semibold text-ink" : ""
-              }`}
-            >
-              <span className="text-gold text-xs mt-1">•</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
+    <li className="flex flex-col rounded-2xl border border-line bg-surface p-6 transition-shadow duration-500 hover:shadow-soft">
+      <div className="flex items-baseline justify-between gap-3 border-b border-line pb-4">
+        <h3 className="font-display text-[1.625rem] leading-none text-ink">{menu.title}</h3>
+        {!plain && <span className="font-display text-sm italic text-gold">{String(index + 1).padStart(2, "0")}</span>}
       </div>
-
-      <div className="mt-6 pt-4 border-t border-line/40">
+      <ul className="mt-4 flex-1 space-y-2 text-[0.9375rem] text-ink-soft">
+        {items.map((item, i) => (
+          <li key={item} className={`flex gap-2.5 ${i === 0 && !plain ? "font-semibold text-ink" : ""}`}>
+            <span aria-hidden="true" className="mt-[0.6em] h-1 w-1 shrink-0 rounded-full bg-gold-container" />
+            {item}
+          </li>
+        ))}
+      </ul>
+      {!plain && (
         <a
-          href={cardWaUrl}
+          href={getWhatsAppUrl(
+            `Assalam o Alaikum, I would like to inquire about the per-head rate for ${menu.title} at Sadiq Pearl Marquee.`
+          )}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`Ask about ${menu.title} on WhatsApp: 0345 5673921`}
-          className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg border border-gold/40 hover:border-gold text-gold hover:bg-gold hover:text-white transition-colors text-xs font-semibold"
+          className="mt-5 inline-flex min-h-[44px] items-center gap-2 self-start text-sm font-semibold text-gold transition-colors hover:text-ink"
         >
-          <WhatsAppGlyph className="w-3.5 h-3.5 fill-current" />
-          <span>Ask per-head rate</span>
+          <WhatsAppGlyph className="h-4 w-4" />
+          <span className="link-underline">Ask per-head rate</span>
         </a>
-      </div>
-    </article>
+      )}
+    </li>
   );
 }

@@ -1,80 +1,53 @@
 import type { Metadata, Viewport } from "next";
+import { Cormorant_Garamond, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import { business } from "@/lib/config";
+import { business, siteUrl } from "@/lib/config";
+import { baseOpenGraph } from "@/lib/seo";
 
-const siteUrl = "https://www.sadiqpearlmarquee.com"; // PLACEHOLDER — set the real production domain
+// Self-hosted at build time by next/font: no render-blocking third-party CSS.
+const display = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const body = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const defaultTitle = "Sadiq Pearl Marquee | Wedding & Event Venue in Sarai Alamgir";
+const defaultDescription =
+  "Sadiq Pearl Marquee is a wedding and event venue on Rashidpur–Orangabad Road, Kakrot, Sarai Alamgir, with in-house catering, table service, and free parking for weddings, mehndi, barat, walima and family celebrations.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: {
-    default: "Sadiq Pearl Marquee | Wedding & Event Venue in Sarai Alamgir",
-    template: "%s | Sadiq Pearl Marquee",
-  },
-  description:
-    "Sadiq Pearl Marquee is a wedding and event venue on Rashidpur–Orangabad Road, Kakrot, Sarai Alamgir. Table service dining, free parking, and space for weddings, mehndi, barat, walima and family celebrations.",
+  title: { default: defaultTitle, template: "%s | Sadiq Pearl Marquee" },
+  description: defaultDescription,
+  applicationName: business.name,
   keywords: [
     "Sadiq Pearl Marquee",
     "wedding venue Sarai Alamgir",
     "marquee Kakrot",
-    "event venue Pakistan",
     "shadi hall Sarai Alamgir",
+    "mehndi venue",
+    "walima venue",
   ],
-  alternates: {
-    canonical: "/",
-  },
-  openGraph: {
-    title: "Sadiq Pearl Marquee | Wedding & Event Venue in Sarai Alamgir",
-    description:
-      "A wedding and event venue in Kakrot, Sarai Alamgir with table service dining, free parking, and space for weddings, mehndi, barat and family celebrations.",
-    url: siteUrl,
-    siteName: business.name,
-    images: [
-      {
-        url: "/images/hero/hero-primary.jpg",
-        width: 1024,
-        height: 576,
-        alt: "Sadiq Pearl Marquee illuminated facade at night",
-      },
-    ],
-    locale: "en_PK",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Sadiq Pearl Marquee | Wedding & Event Venue in Sarai Alamgir",
-    description:
-      "A wedding and event venue in Kakrot, Sarai Alamgir with table service dining, free parking, and space for celebrations.",
-    images: ["/images/hero/hero-primary.jpg"],
-  },
-  icons: {
-    icon: "/favicon.ico",
-  },
+  openGraph: baseOpenGraph,
+  twitter: { card: "summary_large_image" },
+  icons: { icon: "/favicon.ico" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fcf9f5",
+  themeColor: "#17120f",
   width: "device-width",
   initialScale: 1,
-};
-
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "EventVenue",
-  name: business.name,
-  image: `${siteUrl}/images/hero/hero-primary.jpg`,
-  telephone: business.phoneDisplay,
-  address: {
-    "@type": "PostalAddress",
-    streetAddress: business.addressLine1,
-    addressLocality: "Sarai Alamgir",
-    addressCountry: "PK",
-  },
-  aggregateRating: {
-    "@type": "AggregateRating",
-    ratingValue: business.rating,
-    reviewCount: business.reviewCount,
-  },
-  url: siteUrl,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -83,21 +56,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${display.variable} ${body.variable}`}
+      suppressHydrationWarning
+    >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <script
-          type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        {/* Marks JS as available before first paint so reveal styles apply without a flash. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
       </head>
-      <body className="font-body antialiased bg-surface text-ink">{children}</body>
+      <body className="bg-surface font-body text-ink antialiased">{children}</body>
     </html>
   );
 }

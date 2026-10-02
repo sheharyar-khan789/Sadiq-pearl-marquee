@@ -1,6 +1,6 @@
-import Image from "next/image";
 import { business, media } from "@/lib/config";
-import { getWhatsAppUrl } from "@/lib/whatsapp";
+import { getWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER } from "@/lib/whatsapp";
+import AmbientVideo from "./AmbientVideo";
 import SectionHead from "./Section";
 import Icon, { TikTokGlyph, WhatsAppGlyph } from "./Icon";
 
@@ -10,198 +10,99 @@ export default function Location() {
   );
 
   return (
-    <section id="contact" className="py-16 md:py-24 scroll-mt-20 border-b border-line/40 bg-surface">
+    <section id="contact" aria-labelledby="contact-title" className="bg-surface-low py-20 sm:py-28 lg:py-36">
       <span id="location" className="sr-only" />
-
-      <div className="max-w-content mx-auto container-px">
-        {/* Section Header */}
-        <div className="mb-12 sm:mb-16">
+      <div className="container-px mx-auto grid max-w-content gap-12 grid-cols-1 lg:grid-cols-12 lg:gap-16">
+        <div className="lg:col-span-5">
           <SectionHead
-            eyebrow="Location &amp; Direct Contact"
-            title="Visit Sadiq Pearl Marquee"
-            intro="Located prominently on Rashidpur–Orangabad Road in Kakrot, Sarai Alamgir. Easily accessible with generous on-site and street parking for all arriving guests."
+            id="contact-title"
+            eyebrow="Visit & Contact"
+            title={
+              <>
+                Find us in <em className="text-gold">Kakrot</em>
+              </>
+            }
+            intro="On Rashidpur–Orangabad Road, Sarai Alamgir, with an on-site parking lot and free street parking."
           />
-        </div>
 
-        <div className="grid lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-          {/* Left Column: Verified Contact Details */}
-          <div className="lg:col-span-6 space-y-6">
-            {/* Card 1: Physical Address & Directions */}
-            <div className="p-6 sm:p-7 rounded-2xl bg-surface-low border border-line/70 shadow-sm">
-              <div className="flex items-start gap-4">
-                <span className="w-11 h-11 rounded-xl bg-gold/10 text-gold grid place-items-center shrink-0 mt-0.5">
-                  <Icon name="pin" className="w-5 h-5" />
-                </span>
-                <div className="flex-1">
-                  <h3 className="font-display text-lg sm:text-xl text-ink font-semibold">
-                    Venue Address
-                  </h3>
-                  <address className="not-italic text-sm sm:text-base text-ink-soft leading-relaxed mt-1">
-                    <strong className="text-ink font-semibold block">{business.name}</strong>
-                    {business.addressLine1},<br />
-                    {business.addressLine2}
-                  </address>
-                  <div className="mt-4 pt-4 border-t border-line/50 flex flex-wrap items-center gap-3">
-                    <a
-                      href={business.googleMapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-11 px-5 rounded-xl transition-all shadow-sm active:scale-95"
-                    >
-                      <Icon name="pin" className="w-4 h-4" />
-                      <span>Get Directions</span>
-                    </a>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-                      <Icon name="parking" className="w-3.5 h-3.5 text-gold" />
-                      <span>Free on-site parking</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Direct Phone Numbers */}
-            <div className="p-6 sm:p-7 rounded-2xl bg-surface-low border border-line/70 shadow-sm">
-              <div className="flex items-start gap-4">
-                <span className="w-11 h-11 rounded-xl bg-gold/10 text-gold grid place-items-center shrink-0 mt-0.5">
-                  <Icon name="phone" className="w-5 h-5" />
-                </span>
-                <div className="flex-1">
-                  <h3 className="font-display text-lg sm:text-xl text-ink font-semibold">
-                    Telephone Numbers
-                  </h3>
-                  <p className="text-xs text-ink-muted mt-0.5 mb-3">
-                    Call our management directly for reservations and event queries:
-                  </p>
-                  <ul className="grid sm:grid-cols-3 gap-2.5">
-                    {business.phones.map((phone, idx) => (
-                      <li key={phone.href}>
-                        <a
-                          href={phone.href}
-                          className="flex flex-col p-3 rounded-xl bg-surface border border-line/70 hover:border-gold text-ink hover:text-gold transition-colors text-center"
-                        >
-                          <span className="text-[10px] uppercase tracking-wider text-ink-muted">
-                            {idx === 0 ? "Line 1" : idx === 1 ? "Line 2" : "Line 3"}
-                          </span>
-                          <span className="font-semibold text-xs sm:text-sm mt-0.5 whitespace-nowrap">
-                            {phone.display}
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: WhatsApp Inquiry (Strictly 03455673921) */}
-            <div className="p-6 sm:p-7 rounded-2xl bg-surface-low border border-line/70 shadow-sm">
-              <div className="flex items-start gap-4">
-                <span className="w-11 h-11 rounded-xl bg-gold/10 text-gold grid place-items-center shrink-0 mt-0.5">
-                  <WhatsAppGlyph className="w-5 h-5 fill-current" />
-                </span>
-                <div className="flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-display text-lg sm:text-xl text-ink font-semibold">
-                      WhatsApp Inquiries
-                    </h3>
-                    <span className="text-[10px] uppercase tracking-wider text-gold font-semibold bg-gold/10 px-2 py-0.5 rounded">
-                      Inquiry Line
-                    </span>
-                  </div>
-                  <p className="text-xs sm:text-sm text-ink-soft leading-relaxed mt-1 mb-4">
-                    Send inquiries regarding date availability, guest counts, and catering options to our dedicated WhatsApp number:
-                    <strong className="text-ink font-semibold ml-1">0345 5673921</strong>.
-                  </p>
-                  <a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Inquire on WhatsApp: 0345 5673921"
-                    className="inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-11 px-5 rounded-xl transition-all shadow-sm active:scale-95"
-                  >
-                    <WhatsAppGlyph className="w-4 h-4 fill-current" />
-                    <span>Inquire on WhatsApp (0345 5673921)</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Verified TikTok Social Profile */}
-            {business.social.tiktok && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-surface-low border border-line/70 shadow-sm flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-xl bg-night text-white grid place-items-center shrink-0">
-                    <TikTokGlyph className="w-5 h-5 fill-current" />
-                  </span>
-                  <div>
-                    <h4 className="text-sm font-semibold text-ink">
-                      Official TikTok
-                    </h4>
-                    <p className="text-xs text-ink-muted">
-                      {business.social.tiktokHandle}
-                    </p>
-                  </div>
-                </div>
-                <a
-                  href={business.social.tiktok}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-gold hover:text-gold-container font-semibold transition-colors"
-                >
-                  <span>Follow profile</span>
-                  <Icon name="external" className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Real Venue Photography & Map Destination */}
-          <div className="lg:col-span-6 space-y-6">
-            <div className="relative aspect-[4/3] rounded-2xl overflow-hidden shadow-lg border border-line/70 bg-surface-high">
-              <Image
-                src={media.daytimeFacade}
-                alt="Sadiq Pearl Marquee exterior frontage in daylight on Rashidpur–Orangabad Road"
-                fill
-                sizes="(min-width: 1024px) 50vw, 100vw"
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-night/20 to-transparent pointer-events-none" />
-              <div className="absolute bottom-5 left-5 right-5 text-white">
-                <span className="text-[10px] uppercase tracking-widest text-gold-light font-semibold block mb-1">
-                  Marquee Exterior &amp; Frontage
-                </span>
-                <p className="font-display text-lg sm:text-xl font-medium leading-tight">
-                  Rashidpur–Orangabad Road, Kakrot, Sarai Alamgir
-                </p>
-                <p className="text-xs text-white/80 mt-1">
-                  Illuminated facade with generous on-site and street parking
-                </p>
-              </div>
-            </div>
-
-            {/* Verified Google Maps Box */}
-            <div className="p-6 rounded-2xl bg-surface-low border border-line/70 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-gold font-semibold mb-1">
-                  Navigation &amp; Travel
-                </p>
-                <h4 className="font-display text-base sm:text-lg text-ink font-semibold">
-                  Google Maps Location
-                </h4>
-                <p className="text-xs text-ink-soft mt-0.5">
-                  Open coordinates and turn-by-turn navigation directly on your device.
-                </p>
-              </div>
+          <div data-reveal className="mt-10 space-y-8">
+            <div>
+              <h3 className="text-eyebrow font-semibold uppercase text-gold">Address</h3>
+              <address className="mt-3 font-display text-[1.625rem] not-italic leading-snug text-ink">
+                {business.addressLine1},
+                <br />
+                {business.addressLine2}
+              </address>
               <a
                 href={business.googleMapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-surface hover:bg-gold hover:text-white border border-gold text-gold font-semibold text-xs sm:text-sm h-11 px-5 rounded-xl transition-all shadow-sm shrink-0"
+                className="btn btn-primary mt-5"
               >
-                <Icon name="pin" className="w-4 h-4" />
-                <span>Open in Google Maps</span>
+                <Icon name="pin" className="h-4 w-4" />
+                Get directions
               </a>
+            </div>
+
+            <div className="border-t border-line pt-8">
+              <h3 className="text-eyebrow font-semibold uppercase text-gold">Phone</h3>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {business.phones.map((p) => (
+                  <li key={p.href}>
+                    <a
+                      href={p.href}
+                      className="flex min-h-[48px] items-center gap-2.5 whitespace-nowrap rounded-xl border border-line bg-surface px-4 text-[0.9375rem] font-semibold text-ink transition-colors hover:border-ink/40"
+                    >
+                      <Icon name="phone" className="h-4 w-4 text-gold" />
+                      {p.display}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="border-t border-line pt-8">
+              <h3 className="text-eyebrow font-semibold uppercase text-gold">WhatsApp inquiries</h3>
+              <p className="mt-3 text-[0.9375rem] leading-relaxed text-ink-soft">
+                For dates, guest numbers and menus, message us on{" "}
+                <strong className="font-semibold text-ink">{WHATSAPP_DISPLAY_NUMBER}</strong>.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                  <WhatsAppGlyph className="h-[18px] w-[18px] text-gold" />
+                  Message on WhatsApp
+                </a>
+                {business.social.tiktok && (
+                  <a
+                    href={business.social.tiktok}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline"
+                    aria-label={`TikTok ${business.social.tiktokHandle}`}
+                  >
+                    <TikTokGlyph className="h-4 w-4" />
+                    {business.social.tiktokHandle}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-7">
+          <div data-reveal="depth" className="relative lg:sticky lg:top-28">
+            <AmbientVideo
+              src={media.aerialVideo}
+              poster={media.aerialPoster}
+              label="Aerial view of Sadiq Pearl Marquee and its road frontage"
+              sizes="(min-width: 1024px) 700px, 100vw"
+              className="aspect-video rounded-3xl bg-espresso shadow-lift"
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-3xl bg-gradient-to-t from-espresso/85 to-transparent p-6 pt-20 text-white sm:p-8">
+              <p className="text-eyebrow font-semibold uppercase text-gold-light">From above</p>
+              <p className="mt-1.5 font-display text-2xl leading-tight sm:text-3xl">
+                The marquee and its road frontage
+              </p>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { terms } from "@/data/menu";
 import { getWhatsAppUrl } from "@/lib/whatsapp";
 import { useBooking } from "./BookingContext";
@@ -8,31 +9,65 @@ import { useDialog } from "./useDialog";
 
 export default function TermsSheet() {
   const { termsOpen, closeTerms } = useBooking();
-  const closeRef = useDialog(termsOpen, closeTerms);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useDialog(termsOpen, closeTerms, panelRef);
   if (!termsOpen) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="terms-title">
-      <div className="absolute inset-0 bg-night/60" onClick={closeTerms} />
-      <div className="relative w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-surface rounded-t-2xl sm:rounded-xl shadow-2xl p-6 md:p-8">
-        <div className="flex items-start justify-between gap-4 mb-2">
+    <div
+      className="fixed inset-0 z-[75] flex items-end justify-center sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="terms-title"
+    >
+      <div className="absolute inset-0 animate-fade-in bg-espresso/70 backdrop-blur-sm" onClick={closeTerms} />
+      <div
+        ref={panelRef}
+        className="relative max-h-[92svh] w-full animate-fade-up overflow-y-auto rounded-t-3xl bg-surface p-6 shadow-frame sm:max-w-2xl sm:rounded-3xl sm:p-10"
+      >
+        <div className="mb-2 flex items-start justify-between gap-4">
           <div>
-            <p lang="ur" dir="rtl" className="text-gold text-lg">شرائط و ضوابط</p>
-            <h2 id="terms-title" className="font-display text-3xl text-ink">Booking terms</h2>
+            <p lang="ur" dir="rtl" className="text-lg text-gold">
+              شرائط و ضوابط
+            </p>
+            <h2 id="terms-title" className="font-display text-[2.25rem] leading-none text-ink">
+              Booking terms
+            </h2>
           </div>
-          <button ref={closeRef} type="button" onClick={closeTerms} aria-label="Close terms" className="w-10 h-10 grid place-items-center rounded hover:bg-surface-mid shrink-0"><Icon name="close" /></button>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={closeTerms}
+            aria-label="Close terms"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line-strong/50 text-ink hover:bg-surface-mid"
+          >
+            <Icon name="close" className="h-5 w-5" />
+          </button>
         </div>
-        <p className="text-sm text-ink-soft mb-6">Translated from the Urdu terms on our printed menu card.</p>
-        <ol className="space-y-5">
+        <p className="mb-8 text-sm text-ink-soft">Translated from the Urdu terms on our printed menu card.</p>
+        <ol className="divide-y divide-line border-y border-line">
           {terms.map((t, i) => (
-            <li key={t.title} className="flex gap-4">
-              <span className="font-display text-xl text-gold-container w-7 shrink-0">{i + 1}</span>
-              <div><h3 className="font-semibold text-ink">{t.title}</h3><p className="text-sm leading-6 text-ink-soft">{t.body}</p></div>
+            <li key={t.title} className="flex gap-5 py-4">
+              <span className="w-6 shrink-0 font-display text-xl italic text-gold">{i + 1}</span>
+              <div>
+                <h3 className="font-semibold text-ink">{t.title}</h3>
+                <p className="mt-0.5 text-sm leading-6 text-ink-soft">{t.body}</p>
+              </div>
             </li>
           ))}
         </ol>
-        <div className="mt-8 flex flex-col sm:flex-row gap-3">
-          <a href={getWhatsAppUrl("Assalam o Alaikum, I have a question about Sadiq Pearl Marquee booking terms.")} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 bg-gold text-white font-semibold h-12 px-6 rounded hover:bg-gold-container transition-colors"><WhatsAppGlyph /> Ask a question</a>
-          <button type="button" onClick={closeTerms} className="h-12 px-6 rounded border border-gold text-gold font-semibold hover:bg-gold hover:text-white transition-colors">Close</button>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <a
+            href={getWhatsAppUrl("Assalam o Alaikum, I have a question about Sadiq Pearl Marquee booking terms.")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary"
+          >
+            <WhatsAppGlyph className="h-[18px] w-[18px]" />
+            Ask a question
+          </a>
+          <button type="button" onClick={closeTerms} className="btn btn-outline">
+            Close
+          </button>
         </div>
       </div>
     </div>

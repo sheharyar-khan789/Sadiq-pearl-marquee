@@ -1,8 +1,15 @@
+import Image from "next/image";
 import { business } from "@/lib/config";
-import { getWhatsAppUrl } from "@/lib/whatsapp";
-import SectionHead from "./Section";
+import { getWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER } from "@/lib/whatsapp";
 import BookingForm from "./BookingForm";
+import SectionHead from "./Section";
 import Icon, { WhatsAppGlyph } from "./Icon";
+
+const steps = [
+  "Send your date, event and guest count",
+  "Management replies on WhatsApp with availability and menu options",
+  "Your date is confirmed by the venue",
+];
 
 export default function FinalCta() {
   const whatsappUrl = getWhatsAppUrl(
@@ -10,61 +17,61 @@ export default function FinalCta() {
   );
 
   return (
-    <section id="inquire" className="bg-surface-low py-16 md:py-24 scroll-mt-20 border-b border-line/40">
+    <section id="inquire" aria-labelledby="inquire-title" className="relative isolate overflow-hidden bg-espresso py-20 text-white sm:py-28 lg:py-36">
       <span id="reserve" className="sr-only" />
-      <div className="max-w-content mx-auto container-px grid lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-        {/* Left Column: Context & Direct Contact Options */}
-        <div className="lg:col-span-5 space-y-6">
+      <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-25">
+        <Image src="/images/gallery/chandelier-hall.jpg" alt="" fill sizes="100vw" className="object-cover" />
+      </div>
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-b from-espresso via-espresso/90 to-espresso" />
+
+      <div className="container-px mx-auto grid max-w-content gap-12 grid-cols-1 lg:grid-cols-12 lg:gap-16">
+        <div className="lg:col-span-5">
           <SectionHead
-            eyebrow="Event Inquiry"
-            title="Ask About Your Date &amp; Arrangements"
-            intro="Tell us about your upcoming wedding, reception, or family gathering. Our management will respond directly on WhatsApp with availability and per-head menu options."
+            id="inquire-title"
+            tone="dark"
+            eyebrow="Book Your Event"
+            title={
+              <>
+                Ask about your <em className="text-gold-light">date</em>
+              </>
+            }
+            intro="Tell us about your wedding, reception or family gathering. Management will reply on WhatsApp with availability and per-head menu options."
           />
 
-          <div className="p-6 rounded-2xl bg-surface border border-line/70 shadow-sm space-y-4">
-            <h4 className="text-xs uppercase tracking-widest text-gold font-semibold">
-              Immediate Assistance
-            </h4>
+          <ol data-reveal className="mt-10 space-y-5">
+            {steps.map((s, i) => (
+              <li key={s} className="flex gap-4">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold-light/40 font-display text-lg italic text-gold-light">
+                  {i + 1}
+                </span>
+                <span className="pt-1.5 text-[0.9375rem] leading-relaxed text-white/80">{s}</span>
+              </li>
+            ))}
+          </ol>
 
-            <div>
-              <p className="text-xs text-ink-muted mb-1">Direct Phone Contact:</p>
-              <div className="flex flex-col gap-1.5">
-                {business.phones.map((phone) => (
-                  <a
-                    key={phone.href}
-                    href={phone.href}
-                    className="inline-flex items-center gap-2 text-ink hover:text-gold transition-colors font-semibold text-sm"
-                  >
-                    <Icon name="phone" className="w-4 h-4 text-gold shrink-0" />
-                    <span>{phone.display}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-line/50">
-              <p className="text-xs text-ink-muted mb-1.5">Direct WhatsApp Line:</p>
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Direct message on WhatsApp: 0345 5673921"
-                className="inline-flex items-center gap-2 text-gold hover:text-gold-container transition-colors font-semibold text-sm"
-              >
-                <WhatsAppGlyph className="w-4 h-4 fill-current shrink-0" />
-                <span>0345 5673921</span>
+          <div data-reveal className="mt-10 space-y-3 border-t border-white/10 pt-8 text-sm">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-[44px] items-center gap-3 font-semibold text-gold-light hover:text-white"
+            >
+              <WhatsAppGlyph className="h-5 w-5" />
+              WhatsApp {WHATSAPP_DISPLAY_NUMBER}
+            </a>
+            {business.phones.map((p) => (
+              <a key={p.href} href={p.href} className="flex min-h-[44px] items-center gap-3 text-white/80 hover:text-white">
+                <Icon name="phone" className="h-5 w-5 text-gold-light" />
+                {p.display}
               </a>
-            </div>
-
-            <div className="pt-3 border-t border-line/50 text-xs text-ink-muted leading-relaxed">
-              <span>Location: {business.addressLine1}, {business.addressLine2}</span>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Right Column: Inquiry Form */}
-        <div className="lg:col-span-7 bg-surface rounded-2xl border border-line/70 p-6 sm:p-8 lg:p-10 shadow-sm">
-          <BookingForm />
+        <div className="lg:col-span-7">
+          <div data-reveal="depth" className="rounded-3xl bg-surface p-6 text-ink shadow-frame sm:p-8 lg:p-10">
+            <BookingForm />
+          </div>
         </div>
       </div>
     </section>

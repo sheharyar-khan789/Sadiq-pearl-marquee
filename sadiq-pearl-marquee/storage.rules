@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Sadiq Pearl Marquee — Cloud Storage Security Rules (Phase 2).
+//
+// No feature uploads or reads files from Storage yet (profile photos, gallery
+// and media management belong to later phases), so everything is closed:
+// no anonymous or authenticated reads or writes. Each future upload path will
+// get its own narrowly scoped rule (owner, content type, size) in its phase.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

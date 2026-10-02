@@ -1,307 +1,273 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { business, media } from "@/lib/config";
-import { getWhatsAppUrl } from "@/lib/whatsapp";
-import Icon, { Stars, WhatsAppGlyph } from "./Icon";
+import { getWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER } from "@/lib/whatsapp";
+import BookNowButton from "./BookNowButton";
+import Icon, { WhatsAppGlyph } from "./Icon";
+import { useDialog } from "./useDialog";
 
-export interface NavLinkItem {
-  href: string;
-  label: string;
-  longLabel: string;
+export const navLinks = [
+  { id: "about", label: "About" },
+  { id: "venue", label: "The Venue" },
+  { id: "decor", label: "Stages & Décor" },
+  { id: "events", label: "Events" },
+  { id: "menus", label: "Menus" },
+  { id: "gallery", label: "Gallery" },
+  { id: "contact", label: "Contact" },
+] as const;
+
+function subscribeScroll(cb: () => void) {
+  window.addEventListener("scroll", cb, { passive: true });
+  return () => window.removeEventListener("scroll", cb);
 }
-
-export const navLinks: NavLinkItem[] = [
-  { href: "#home", label: "Home", longLabel: "Home" },
-  { href: "#about", label: "About", longLabel: "About Sadiq Pearl" },
-  { href: "#features", label: "Venue / Features", longLabel: "Venue & Features" },
-  { href: "#events", label: "Events", longLabel: "Events & Celebrations" },
-  { href: "#menus", label: "Menu", longLabel: "Catering & Menus" },
-  { href: "#gallery", label: "Gallery", longLabel: "Photo Gallery" },
-  { href: "#contact", label: "Contact", longLabel: "Contact & Location" },
-];
+const getScrolled = () => window.scrollY > 24;
+const getServerScrolled = () => false;
 
 export default function Navbar() {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+  const scrolled = useSyncExternalStore(subscribeScroll, getScrolled, getServerScrolled);
   const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const closeRef = useDialog(open, close, panelRef);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const solid = !isHome || scrolled;
+  const href = (id: string) => (isHome ? `#${id}` : `/#${id}`);
+  const whatsappUrl = getWhatsAppUrl();
 
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      closeRef.current?.focus();
-    } else {
-      document.body.style.overflow = "";
+  // In the mobile menu, close first, then scroll, so the scroll lock is released.
+  const onMenuLink = (e: React.MouseEvent, id: string) => {
+    if (!isHome) {
+      setOpen(false);
+      return;
     }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && open) {
-        setOpen(false);
-        menuButtonRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
-  const go = useCallback((e: React.MouseEvent, href: string) => {
+    e.preventDefault();
     setOpen(false);
-
-    // If target element exists on this page, smooth scroll
-    const target = document.querySelector(href);
-    if (target) {
-      e.preventDefault();
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth" });
-      }, 50);
-    } else if (href.startsWith("#")) {
-      e.preventDefault();
-      window.location.href = `/${href}`;
-    }
-  }, []);
-
-  const whatsappInquiryUrl = getWhatsAppUrl();
+    window.setTimeout(() => {
+      const target = document.getElementById(id);
+      if (!target) return;
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+      history.replaceState(null, "", `#${id}`);
+    }, 60);
+  };
 
   return (
     <>
       <header
-        className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? "bg-surface/95 backdrop-blur-md shadow-sm border-b border-line/60 py-2.5"
-            : "bg-surface/90 backdrop-blur-sm border-b border-line/40 py-3.5"
+        className={`fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,box-shadow] duration-500 ease-elegant ${
+          solid
+            ? "border-line/70 bg-surface/90 shadow-[0_8px_30px_-20px_rgba(30,25,21,0.35)] backdrop-blur-xl"
+            : "border-transparent bg-transparent"
         }`}
       >
-        <div className="max-w-content mx-auto container-px flex items-center justify-between gap-4">
-          {/* Logo */}
-          <a
-            href="#home"
-            onClick={(e) => go(e, "#home")}
-            className="flex items-center gap-2.5 sm:gap-3 group shrink-0 focus-visible:ring-2 focus-visible:ring-gold"
-            aria-label={`${business.name} — return to top`}
-          >
-            <Image
-              src={media.logo}
-              alt="Sadiq Pearl Marquee logo"
-              width={40}
-              height={40}
-              priority
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded object-cover shadow-sm ring-1 ring-gold/25"
-            />
-            <span className="leading-tight">
-              <span className="block font-display text-base sm:text-lg tracking-wide text-ink group-hover:text-gold transition-colors font-medium">
-                SADIQ PEARL
+        <div className="container-px mx-auto flex h-[68px] max-w-content items-center justify-between gap-6 lg:h-20">
+          <Link href="/" className="group flex shrink-0 items-center gap-3" aria-label={`${business.name}, home`}>
+            <span className="relative h-10 w-10 overflow-hidden rounded-full ring-1 ring-gold-light/50">
+              <Image src={media.logo} alt="" fill sizes="40px" className="object-cover" />
+            </span>
+            <span className="leading-none">
+              <span
+                className={`block font-display text-[1.375rem] font-semibold tracking-[0.01em] transition-colors duration-500 ${
+                  solid ? "text-ink" : "text-white"
+                }`}
+              >
+                Sadiq Pearl
               </span>
-              <span className="block whitespace-nowrap text-[9px] sm:text-[10px] uppercase tracking-[0.14em] sm:tracking-[0.18em] text-gold font-semibold">
-                Marquee · Sarai Alamgir
+              <span
+                className={`mt-1 block text-[0.625rem] font-semibold uppercase tracking-[0.34em] transition-colors duration-500 ${
+                  solid ? "text-gold" : "text-gold-light"
+                }`}
+              >
+                Marquee
               </span>
             </span>
-          </a>
+          </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav
-            className="hidden lg:flex items-center gap-4 xl:gap-7"
-            aria-label="Primary navigation"
-          >
-            {navLinks.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={(e) => go(e, item.href)}
-                className="text-xs xl:text-sm font-medium text-ink-soft hover:text-gold transition-colors py-1.5 border-b-2 border-transparent hover:border-gold/50"
-              >
-                {item.label}
-              </a>
-            ))}
+          <nav aria-label="Primary" className="hidden items-center gap-7 xl:flex 2xl:gap-9">
+            {navLinks.map((item) =>
+              isHome ? (
+                <a
+                  key={item.id}
+                  href={href(item.id)}
+                  className={`link-underline py-2 text-[0.8125rem] font-medium tracking-[0.02em] transition-colors ${
+                    solid ? "text-ink-soft hover:text-ink" : "text-white/85 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  key={item.id}
+                  href={href(item.id)}
+                  className="link-underline py-2 text-[0.8125rem] font-medium tracking-[0.02em] text-ink-soft transition-colors hover:text-ink"
+                >
+                  {item.label}
+                </Link>
+              )
+            )}
           </nav>
 
-          {/* Desktop & Mobile Actions */}
-          <div className="flex items-center gap-2">
-            {/* Primary WhatsApp CTA on Desktop */}
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/account"
+              aria-label="Your account"
+              className={`hidden h-11 w-11 place-items-center rounded-full border transition-colors lg:grid ${
+                solid
+                  ? "border-line-strong/60 text-ink hover:border-ink/60"
+                  : "border-white/35 text-white hover:border-white/70 hover:bg-white/10"
+              }`}
+            >
+              <Icon name="user" className="h-[18px] w-[18px]" />
+            </Link>
             <a
-              href={whatsappInquiryUrl}
+              href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Inquire on WhatsApp (0345 5673921)"
-              className="hidden lg:inline-flex items-center gap-2 bg-gold hover:bg-gold-container text-white text-xs xl:text-sm font-semibold px-4 h-10 rounded transition-all shadow-sm active:scale-95"
+              aria-label={`Chat on WhatsApp: ${WHATSAPP_DISPLAY_NUMBER}`}
+              className={`hidden h-11 w-11 place-items-center rounded-full border transition-colors lg:grid ${
+                solid
+                  ? "border-line-strong/60 text-ink hover:border-ink/60"
+                  : "border-white/35 text-white hover:border-white/70 hover:bg-white/10"
+              }`}
             >
-              <WhatsAppGlyph className="w-4 h-4 fill-current shrink-0" />
-              <span>Inquire on WhatsApp</span>
+              <WhatsAppGlyph className="h-[18px] w-[18px]" />
             </a>
+            <BookNowButton className={`btn btn-sm hidden whitespace-nowrap lg:inline-flex ${solid ? "btn-primary" : "btn-accent"}`}>
+              Book Your Event
+            </BookNowButton>
 
-            {/* Direct Quick WhatsApp for Mobile */}
-            <a
-              href={whatsappInquiryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Inquire on WhatsApp: 0345 5673921"
-              className="lg:hidden w-10 h-10 grid place-items-center text-gold hover:bg-surface-mid rounded-full transition-colors"
-            >
-              <WhatsAppGlyph className="w-5 h-5 fill-current" />
-            </a>
-
-            {/* Mobile Hamburger Menu Button */}
             <button
-              ref={menuButtonRef}
               type="button"
               onClick={() => setOpen(true)}
-              aria-label="Open navigation menu"
+              aria-label="Open menu"
               aria-expanded={open}
-              aria-controls="mobile-nav"
-              className="lg:hidden w-10 h-10 grid place-items-center text-ink hover:bg-surface-mid rounded transition-colors"
+              aria-controls="site-menu"
+              className={`inline-flex h-11 items-center gap-2 rounded-full border pl-4 pr-3.5 text-[0.8125rem] font-semibold transition-colors xl:hidden ${
+                solid ? "border-line-strong/60 text-ink" : "border-white/40 text-white"
+              }`}
             >
-              <Icon name="menu" className="w-6 h-6" />
+              Menu
+              <Icon name="menu" className="h-5 w-5" />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Mobile Drawer Backdrop & Dialog */}
+      {/* Mobile menu: a full-screen sheet. `inert` keeps it out of the tab order when closed. */}
       <div
-        className={`fixed inset-0 z-[60] lg:hidden transition-opacity duration-300 ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        id="site-menu"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site menu"
+        inert={!open}
+        // Visibility turns on instantly when opening (so focus can move in) and
+        // turns off only after the fade-out when closing.
+        className={`fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-espresso text-surface xl:hidden ${
+          open
+            ? "visible opacity-100 [transition:opacity_0.5s_cubic-bezier(0.16,1,0.3,1)]"
+            : "invisible opacity-0 [transition:opacity_0.5s_cubic-bezier(0.16,1,0.3,1),visibility_0s_linear_0.5s]"
         }`}
-        aria-hidden={!open}
       >
-        {/* Backdrop overlay */}
         <div
-          onClick={() => setOpen(false)}
-          className="absolute inset-0 bg-night/60 backdrop-blur-sm transition-opacity"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_55%_at_100%_0%,rgba(217,188,134,0.16),transparent_60%)]"
         />
+        <div className="container-px relative flex h-[68px] items-center justify-between">
+          <span className="leading-none">
+            <span className="block font-display text-[1.375rem] font-semibold">Sadiq Pearl</span>
+            <span className="mt-1 block text-[0.625rem] font-semibold uppercase tracking-[0.34em] text-gold-light">
+              Marquee
+            </span>
+          </span>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={close}
+            aria-label="Close menu"
+            className="grid h-11 w-11 place-items-center rounded-full border border-white/25 text-white transition-colors hover:bg-white/10"
+          >
+            <Icon name="close" className="h-5 w-5" />
+          </button>
+        </div>
 
-        {/* Slide-over panel */}
-        <aside
-          id="mobile-nav"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Navigation menu"
-          className={`absolute right-0 top-0 h-full w-[88%] max-w-sm bg-surface shadow-2xl overflow-y-auto flex flex-col justify-between transition-transform duration-400 ease-elegant ${
-            open ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-          <div>
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between p-5 border-b border-line/60 bg-surface-low">
-              <div className="flex items-center gap-3">
-                <Image
-                  src={media.logo}
-                  alt="Sadiq Pearl Marquee logo"
-                  width={42}
-                  height={42}
-                  className="w-10 h-10 rounded object-cover shadow-sm ring-1 ring-gold/20"
-                />
-                <div className="leading-tight">
-                  <p className="font-display text-base font-semibold text-ink">
-                    SADIQ PEARL
-                  </p>
-                  <div className="flex items-center gap-1.5 text-xs text-ink-soft">
-                    <Stars value={business.rating} className="w-3 h-3 text-gold" />
-                    <span>
-                      {business.rating} · {business.reviewCount} Google reviews
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                ref={closeRef}
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close navigation menu"
-                className="w-10 h-10 grid place-items-center rounded-full hover:bg-surface-mid text-ink-soft hover:text-ink transition-colors"
+        <nav aria-label="Mobile" className="container-px relative flex-1 pt-6">
+          <ul className="divide-y divide-white/10 border-y border-white/10">
+            {navLinks.map((item, i) => (
+              <li
+                key={item.id}
+                className={`transition-[opacity,transform] duration-700 ease-elegant ${
+                  open ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+                }`}
+                style={{ transitionDelay: open ? `${80 + i * 45}ms` : "0ms" }}
               >
-                <Icon name="close" className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Mobile Nav Links */}
-            <nav className="p-5" aria-label="Mobile site sections">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold mb-3 px-1">
-                Navigation
-              </p>
-              <ul className="space-y-1">
-                {navLinks.map((item, index) => (
-                  <li key={item.href}>
-                    <a
-                      href={item.href}
-                      onClick={(e) => go(e, item.href)}
-                      className="flex items-center justify-between min-h-[48px] px-3.5 py-3 rounded-lg text-ink font-medium text-base hover:text-gold hover:bg-surface-mid/60 transition-colors"
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-gold/80 w-5">
-                          {String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span>{item.longLabel}</span>
-                      </span>
-                      <Icon name="arrow" className="w-4 h-4 text-ink-soft/60" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Mobile WhatsApp CTA Button */}
-              <div className="mt-6 pt-4 border-t border-line/50">
                 <a
-                  href={whatsappInquiryUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setOpen(false)}
-                  className="w-full flex items-center justify-center gap-2.5 bg-gold hover:bg-gold-container text-white font-semibold h-12 rounded-lg transition-colors shadow-md"
-                  aria-label="Inquire on WhatsApp (0345 5673921)"
+                  href={href(item.id)}
+                  onClick={(e) => onMenuLink(e, item.id)}
+                  className="flex min-h-[60px] items-center justify-between py-3 font-display text-[1.75rem] leading-none text-white"
                 >
-                  <WhatsAppGlyph className="w-5 h-5 fill-current" />
-                  <span>Inquire on WhatsApp</span>
+                  <span>{item.label}</span>
+                  <span className="text-xs font-body font-semibold tracking-[0.2em] text-gold-light/80">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                 </a>
-              </div>
-            </nav>
-          </div>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/gallery"
+            onClick={() => setOpen(false)}
+            className="mt-5 inline-flex min-h-[44px] items-center gap-2 text-sm font-semibold text-gold-light"
+          >
+            View the full photo gallery
+            <Icon name="arrow" className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/account"
+            onClick={() => setOpen(false)}
+            className="mt-1 flex min-h-[44px] items-center gap-2 text-sm font-semibold text-white/80 hover:text-white"
+          >
+            <Icon name="user" className="h-4 w-4 text-gold-light" />
+            Sign in / Your account
+          </Link>
+        </nav>
 
-          {/* Drawer Footer Information */}
-          <div className="p-5 bg-surface-low border-t border-line/60 space-y-3 text-xs text-ink-soft">
-            <p className="font-semibold uppercase tracking-wider text-ink text-[10px]">
-              Direct Contact
-            </p>
-            <div className="space-y-1.5">
-              {business.phones.map((phone) => (
-                <a
-                  key={phone.href}
-                  href={phone.href}
-                  className="flex items-center gap-2.5 text-ink hover:text-gold transition-colors py-1"
-                >
-                  <Icon name="phone" className="w-4 h-4 text-gold shrink-0" />
-                  <span>{phone.display}</span>
-                </a>
-              ))}
+        <div className="container-px relative space-y-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+          <BookNowButton onOpen={close} className="btn btn-accent w-full">
+            Book Your Event
+          </BookNowButton>
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-outline-light w-full"
+          >
+            <WhatsAppGlyph className="h-[18px] w-[18px]" />
+            WhatsApp {WHATSAPP_DISPLAY_NUMBER}
+          </a>
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            {business.phones.map((phone) => (
               <a
-                href={whatsappInquiryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2.5 text-ink hover:text-gold transition-colors py-1"
+                key={phone.href}
+                href={phone.href}
+                className="flex min-h-[48px] flex-col items-center justify-center rounded-xl border border-white/10 px-1 text-center text-[0.75rem] font-medium text-white/85"
               >
-                <WhatsAppGlyph className="w-4 h-4 text-gold shrink-0" />
-                <span>WhatsApp: 0345 5673921</span>
+                <Icon name="phone" className="mb-1 h-3.5 w-3.5 text-gold-light" />
+                {phone.display}
               </a>
-            </div>
-            <p className="flex items-start gap-2.5 pt-2 border-t border-line/40 text-ink-muted">
-              <Icon name="pin" className="w-4 h-4 text-gold shrink-0 mt-0.5" />
-              <span>{business.fullAddress}</span>
-            </p>
+            ))}
           </div>
-        </aside>
+          <p className="flex items-start gap-2 pt-2 text-xs leading-relaxed text-white/60">
+            <Icon name="pin" className="mt-0.5 h-4 w-4 shrink-0 text-gold-light" />
+            {business.fullAddress}
+          </p>
+        </div>
       </div>
     </>
   );

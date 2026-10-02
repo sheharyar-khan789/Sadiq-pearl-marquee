@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { business, eventTypeOptions, guestOptions, sessionOptions } from "@/lib/config";
-import { buildWhatsAppUrl, type BookingDetails } from "@/lib/whatsapp";
+import { useId, useState, useSyncExternalStore } from "react";
+import { business, guestOptions, sessionOptions } from "@/lib/config";
+import { buildWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER, type BookingDetails } from "@/lib/whatsapp";
 import { useBooking } from "./BookingContext";
+import { usePublicEventTypes } from "./usePublicEventTypes";
 import Icon, { WhatsAppGlyph } from "./Icon";
 
 type Errors = Partial<Record<"name" | "phone" | "eventType" | "date" | "guests" | "message", string>>;
@@ -19,13 +20,22 @@ interface FormState {
 }
 
 const inputClass =
-  "w-full h-12 px-4 rounded-xl border border-line bg-surface text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-gold/60 focus:border-gold transition-colors";
+  "block h-12 w-full rounded-xl border border-line-strong/50 bg-surface px-4 text-[0.9375rem] text-ink placeholder:text-ink-muted/70 transition-colors focus:border-ink focus:outline-none focus:ring-2 focus:ring-gold-container/40";
+const errorInput = "border-red-600 focus:border-red-600 focus:ring-red-600/20";
+const labelClass = "mb-1.5 block text-[0.8125rem] font-semibold text-ink";
 
 const todayString = () =>
   new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const noopSubscribe = () => () => {};
 
+/** Event inquiry form. Nothing is stored: submitting opens WhatsApp with the details. */
 export default function BookingForm() {
+  const uid = useId();
+  const id = (name: string) => `${uid}-${name}`;
   const { openTerms } = useBooking();
+  // Active event types from the stored business configuration (same list as bookings).
+  const eventTypes = usePublicEventTypes();
+  const freeText = eventTypes.status === "error" || (eventTypes.status === "ready" && eventTypes.eventTypes.length === 0);
   const [formData, setFormData] = useState<FormState>({
     name: "",
     phone: "",
@@ -35,68 +45,37 @@ export default function BookingForm() {
     guests: "",
     message: "",
   });
-
   const [errors, setErrors] = useState<Errors>({});
   const [sentDetails, setSentDetails] = useState<BookingDetails | null>(null);
 
-  // Set minDate dynamically to avoid stale hydration bakes
-  const [minDate, setMinDate] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    setMinDate(todayString());
-  }, []);
+  // Client-only "today" (undefined during server render) avoids a stale baked-in date.
+  const minDate = useSyncExternalStore(noopSubscribe, todayString, () => undefined);
 
-  const handleChange = (
-    key: keyof FormState
-  ) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const value = e.target.value;
-    setFormData((prev) => ({ ...prev, [key]: value }));
-    // Clear inline error on change
-    if (errors[key as keyof Errors]) {
-      setErrors((prev) => ({ ...prev, [key]: undefined }));
-    }
-  };
+  const handleChange =
+    (key: keyof FormState) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      setFormData((prev) => ({ ...prev, [key]: value }));
+      if (errors[key as keyof Errors]) setErrors((prev) => ({ ...prev, [key]: undefined }));
+    };
 
   const validate = (): boolean => {
-    const newErrors: Errors = {};
-    const trimmedName = formData.name.trim();
-    const cleanPhone = formData.phone.replace(/\D/g, "");
-
-    if (trimmedName.length < 2) {
-      newErrors.name = "Please enter your full name (minimum 2 characters).";
-    }
-
-    if (cleanPhone.length < 10) {
-      newErrors.phone = "Please enter a valid phone number with at least 10 digits.";
-    }
-
-    if (!formData.eventType) {
-      newErrors.eventType = "Please choose an event type.";
-    }
-
-    if (!formData.date) {
-      newErrors.date = "Please select your preferred date.";
-    } else if (formData.date < todayString()) {
-      newErrors.date = "Preferred date cannot be in the past.";
-    }
-
-    if (!formData.guests) {
-      newErrors.guests = "Please select an estimated guest count.";
-    }
-
-    if (formData.message && formData.message.length > 500) {
-      newErrors.message = "Message must be under 500 characters.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const next: Errors = {};
+    if (formData.name.trim().length < 2) next.name = "Please enter your full name (minimum 2 characters).";
+    if (formData.phone.replace(/\D/g, "").length < 10)
+      next.phone = "Please enter a valid phone number with at least 10 digits.";
+    if (!formData.eventType.trim()) next.eventType = freeText ? "Please enter your event type." : "Please choose an event type.";
+    if (!formData.date) next.date = "Please select your preferred date.";
+    else if (formData.date < todayString()) next.date = "Preferred date cannot be in the past.";
+    if (!formData.guests) next.guests = "Please select an estimated guest count.";
+    if (formData.message.length > 500) next.message = "Message must be under 500 characters.";
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-
     const details: BookingDetails = {
       name: formData.name.trim(),
       phone: formData.phone.trim(),
@@ -106,88 +85,67 @@ export default function BookingForm() {
       guests: formData.guests,
       message: formData.message.trim(),
     };
-
     setSentDetails(details);
-    const whatsappLink = buildWhatsAppUrl(details);
-
-    try {
-      window.open(whatsappLink, "_blank", "noopener,noreferrer");
-    } catch {
-      // Graceful fallback: window.location
-      window.location.href = whatsappLink;
-    }
+    window.open(buildWhatsAppUrl(details), "_blank", "noopener,noreferrer");
   };
 
-  // SUCCESS / CONFIRMATION STATE
+  const fieldError = (key: keyof Errors) =>
+    errors[key] ? (
+      <p id={id(`${key}-error`)} role="alert" className="mt-1.5 text-xs font-medium text-red-700">
+        {errors[key]}
+      </p>
+    ) : null;
+  const describedBy = (key: keyof Errors) => (errors[key] ? id(`${key}-error`) : undefined);
+
   if (sentDetails) {
-    const summaryRows: [string, string][] = [
-      ["Full Name", sentDetails.name],
+    const rows: [string, string][] = [
+      ["Name", sentDetails.name],
       ["Phone / WhatsApp", sentDetails.phone],
-      ["Event Type", sentDetails.eventType],
-      ["Preferred Date", sentDetails.date],
+      ["Event", sentDetails.eventType],
+      ["Preferred date", sentDetails.date],
       ["Session", sentDetails.session || "Dinner"],
-      ["Expected Guests", sentDetails.guests],
-      ["Special Notes", sentDetails.message || "None"],
+      ["Guests", sentDetails.guests],
+      ["Notes", sentDetails.message || "None"],
     ];
-
-    const retryUrl = buildWhatsAppUrl(sentDetails);
-
     return (
-      <div role="status" className="text-left space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gold/15 text-gold grid place-items-center shrink-0">
-            <Icon name="check" className="w-6 h-6" />
-          </div>
+      <div role="status" className="space-y-6">
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-gold-pale text-gold">
+            <Icon name="check" className="h-6 w-6" />
+          </span>
           <div>
-            <h3 className="font-display text-xl sm:text-2xl text-ink font-semibold">
-              Inquiry Prepared for WhatsApp
-            </h3>
-            <p className="text-xs text-ink-muted">
-              Redirecting to 0345 5673921
+            <h3 className="font-display text-[1.75rem] leading-tight text-ink">Your inquiry is ready</h3>
+            <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+              WhatsApp should have opened with your details for {WHATSAPP_DISPLAY_NUMBER}.{" "}
+              <strong className="font-semibold text-ink">Press Send in WhatsApp</strong> to reach management. If it
+              didn&rsquo;t open, use the button below.
             </p>
           </div>
         </div>
-
-        <p className="text-sm leading-relaxed text-ink-soft">
-          We opened WhatsApp with your event details pre-filled.{" "}
-          <strong className="text-ink font-semibold">
-            Press &ldquo;Send&rdquo; inside WhatsApp to reach our management.
-          </strong>{" "}
-          Please note that submitting this form does not confirm a booking; dates are confirmed only after venue review.
-        </p>
-
-        {/* Inquiry Summary Review Box */}
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-xs sm:text-sm border border-line/70 rounded-xl p-5 bg-surface-low">
-          {summaryRows.map(([label, val]) => (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface-low p-5 text-sm">
+          {rows.map(([label, val]) => (
             <div key={label} className="contents">
-              <dt className="text-ink-muted font-medium">{label}</dt>
-              <dd className="text-ink font-semibold">{val}</dd>
+              <dt className="text-ink-muted">{label}</dt>
+              <dd className="font-semibold text-ink">{val}</dd>
             </div>
           ))}
         </dl>
-
-        {/* Post-submit Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          <a
-            href={retryUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-11 px-5 rounded-xl transition-all shadow-sm"
-          >
-            <WhatsAppGlyph className="w-4 h-4 fill-current" />
-            <span>Open WhatsApp Again</span>
+        <p className="text-xs leading-relaxed text-ink-muted">
+          Sending this inquiry does not confirm a booking. Dates are confirmed only by venue management.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a href={buildWhatsAppUrl(sentDetails)} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
+            <WhatsAppGlyph className="h-[18px] w-[18px]" />
+            Open WhatsApp
           </a>
-          <a
-            href={business.phoneHref}
-            className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl border border-line hover:border-gold text-ink font-semibold text-xs sm:text-sm transition-colors bg-surface"
-          >
-            <Icon name="phone" className="w-4 h-4 text-gold" />
-            <span>Call {business.phoneDisplay}</span>
+          <a href={business.phoneHref} className="btn btn-outline">
+            <Icon name="phone" className="h-4 w-4 text-gold" />
+            Call {business.phoneDisplay}
           </a>
           <button
             type="button"
             onClick={() => setSentDetails(null)}
-            className="h-11 px-4 text-xs font-semibold text-ink-soft hover:text-gold transition-colors text-center"
+            className="min-h-[44px] px-2 text-sm font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
           >
             Edit details
           </button>
@@ -196,95 +154,103 @@ export default function BookingForm() {
     );
   }
 
-  // ACTIVE INQUIRY FORM
   return (
-    <form onSubmit={handleSubmit} noValidate className="grid sm:grid-cols-2 gap-4 sm:gap-5">
-      {/* Name */}
+    <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 gap-5 sm:grid-cols-2">
       <div>
-        <label htmlFor="inquiry-name" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Full Name <span className="text-gold">*</span>
+        <label htmlFor={id("name")} className={labelClass}>
+          Full name <span className="text-gold">*</span>
         </label>
         <input
-          id="inquiry-name"
+          id={id("name")}
           name="name"
           type="text"
-          required
           autoComplete="name"
+          required
           value={formData.name}
           onChange={handleChange("name")}
           placeholder="e.g. Muhammad Ali"
           aria-invalid={!!errors.name}
-          aria-describedby={errors.name ? "name-error" : undefined}
-          className={`${inputClass} ${errors.name ? "border-red-500 focus:ring-red-400" : ""}`}
+          aria-describedby={describedBy("name")}
+          className={`${inputClass} ${errors.name ? errorInput : ""}`}
         />
-        {errors.name && (
-          <p id="name-error" role="alert" className="mt-1 text-xs text-red-600 font-medium">
-            {errors.name}
-          </p>
-        )}
+        {fieldError("name")}
       </div>
 
-      {/* Phone */}
       <div>
-        <label htmlFor="inquiry-phone" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Phone / WhatsApp Number <span className="text-gold">*</span>
+        <label htmlFor={id("phone")} className={labelClass}>
+          Phone / WhatsApp <span className="text-gold">*</span>
         </label>
         <input
-          id="inquiry-phone"
+          id={id("phone")}
           name="phone"
           type="tel"
-          required
+          inputMode="tel"
           autoComplete="tel"
+          required
           value={formData.phone}
           onChange={handleChange("phone")}
           placeholder="03XX XXXXXXX"
           aria-invalid={!!errors.phone}
-          aria-describedby={errors.phone ? "phone-error" : undefined}
-          className={`${inputClass} ${errors.phone ? "border-red-500 focus:ring-red-400" : ""}`}
+          aria-describedby={describedBy("phone")}
+          className={`${inputClass} ${errors.phone ? errorInput : ""}`}
         />
-        {errors.phone && (
-          <p id="phone-error" role="alert" className="mt-1 text-xs text-red-600 font-medium">
-            {errors.phone}
-          </p>
-        )}
+        {fieldError("phone")}
       </div>
 
-      {/* Event Type */}
       <div>
-        <label htmlFor="inquiry-event" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Event Type <span className="text-gold">*</span>
+        <label htmlFor={id("event")} className={labelClass}>
+          Event type <span className="text-gold">*</span>
         </label>
-        <select
-          id="inquiry-event"
-          name="eventType"
-          required
-          value={formData.eventType}
-          onChange={handleChange("eventType")}
-          aria-invalid={!!errors.eventType}
-          aria-describedby={errors.eventType ? "event-error" : undefined}
-          className={`${inputClass} ${errors.eventType ? "border-red-500 focus:ring-red-400" : ""}`}
-        >
-          <option value="">Select event type…</option>
-          {eventTypeOptions.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-        {errors.eventType && (
-          <p id="event-error" role="alert" className="mt-1 text-xs text-red-600 font-medium">
-            {errors.eventType}
-          </p>
+        {freeText ? (
+          <>
+            <input
+              id={id("event")}
+              name="eventType"
+              required
+              maxLength={60}
+              value={formData.eventType}
+              onChange={handleChange("eventType")}
+              aria-invalid={!!errors.eventType}
+              aria-describedby={`${id("event-note")} ${describedBy("eventType") ?? ""}`.trim()}
+              className={`${inputClass} ${errors.eventType ? errorInput : ""}`}
+            />
+            <p id={id("event-note")} className="mt-1 text-xs text-ink-muted">
+              {eventTypes.status === "error"
+                ? "The list of event types couldn't be loaded. Please type your event."
+                : "Please type your event."}
+            </p>
+          </>
+        ) : (
+          <select
+            id={id("event")}
+            name="eventType"
+            required
+            disabled={eventTypes.status === "loading"}
+            aria-busy={eventTypes.status === "loading" || undefined}
+            value={formData.eventType}
+            onChange={handleChange("eventType")}
+            aria-invalid={!!errors.eventType}
+            aria-describedby={describedBy("eventType")}
+            className={`${inputClass} ${errors.eventType ? errorInput : ""}`}
+          >
+            <option value="">{eventTypes.status === "loading" ? "Loading event types…" : "Select event type…"}</option>
+            {eventTypes.status === "ready" &&
+              eventTypes.eventTypes.map((opt) => (
+                <option key={opt.id} value={opt.name}>
+                  {opt.name}
+                </option>
+              ))}
+          </select>
         )}
+        {fieldError("eventType")}
       </div>
 
-      {/* Preferred Date */}
       <div>
-        <label htmlFor="inquiry-date" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Preferred Date <span className="text-gold">*</span>
+        <label htmlFor={id("date")} className={labelClass}>
+          Preferred date <span className="text-gold">*</span>
         </label>
         <input
-          id="inquiry-date"
+          id={id("date")}
           name="date"
           type="date"
           min={minDate}
@@ -292,110 +258,99 @@ export default function BookingForm() {
           value={formData.date}
           onChange={handleChange("date")}
           aria-invalid={!!errors.date}
-          aria-describedby={errors.date ? "date-error" : undefined}
-          className={`${inputClass} ${errors.date ? "border-red-500 focus:ring-red-400" : ""}`}
+          aria-describedby={describedBy("date")}
+          className={`${inputClass} ${errors.date ? errorInput : ""}`}
         />
-        {errors.date && (
-          <p id="date-error" role="alert" className="mt-1 text-xs text-red-600 font-medium">
-            {errors.date}
-          </p>
-        )}
+        {fieldError("date")}
       </div>
 
-      {/* Session (Lunch / Dinner) */}
       <fieldset>
-        <legend className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Preferred Session
-        </legend>
-        <div className="grid grid-cols-2 gap-2.5">
-          {sessionOptions.map((session) => (
-            <label
-              key={session}
-              className={`h-12 grid place-items-center rounded-xl border cursor-pointer text-xs sm:text-sm font-semibold transition-all ${
-                formData.session === session
-                  ? "bg-gold text-white border-gold shadow-sm"
-                  : "bg-surface border-line text-ink-soft hover:border-gold hover:text-gold"
-              }`}
-            >
-              <input
-                type="radio"
-                name="session"
-                value={session}
-                checked={formData.session === session}
-                onChange={handleChange("session")}
-                className="sr-only"
-              />
-              <span>{session}</span>
-            </label>
-          ))}
+        <legend className={labelClass}>Preferred session</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {sessionOptions.map((session) => {
+            const checked = formData.session === session;
+            return (
+              <label
+                key={session}
+                className={`flex h-12 cursor-pointer items-center justify-center rounded-xl border text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-gold-container ${
+                  checked
+                    ? "border-espresso bg-espresso text-surface"
+                    : "border-line-strong/50 bg-surface text-ink-soft hover:border-ink/50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${uid}-session`}
+                  value={session}
+                  checked={checked}
+                  onChange={handleChange("session")}
+                  className="sr-only"
+                />
+                {session}
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 
-      {/* Expected Guests */}
       <div>
-        <label htmlFor="inquiry-guests" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Expected Guests <span className="text-gold">*</span>
+        <label htmlFor={id("guests")} className={labelClass}>
+          Expected guests <span className="text-gold">*</span>
         </label>
         <select
-          id="inquiry-guests"
+          id={id("guests")}
           name="guests"
           required
           value={formData.guests}
           onChange={handleChange("guests")}
           aria-invalid={!!errors.guests}
-          aria-describedby={errors.guests ? "guests-error" : undefined}
-          className={`${inputClass} ${errors.guests ? "border-red-500 focus:ring-red-400" : ""}`}
+          aria-describedby={describedBy("guests")}
+          className={`${inputClass} ${errors.guests ? errorInput : ""}`}
         >
-          <option value="">Select guest count bracket…</option>
+          <option value="">Select guest count…</option>
           {guestOptions.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
             </option>
           ))}
         </select>
-        {errors.guests && (
-          <p id="guests-error" role="alert" className="mt-1 text-xs text-red-600 font-medium">
-            {errors.guests}
-          </p>
-        )}
+        {fieldError("guests")}
       </div>
 
-      {/* Message / Special Requests */}
       <div className="sm:col-span-2">
-        <label htmlFor="inquiry-message" className="block text-xs sm:text-sm font-semibold text-ink mb-1.5">
-          Message &amp; Special Requirements (Optional)
+        <label htmlFor={id("message")} className={labelClass}>
+          Message &amp; special requirements <span className="font-normal text-ink-muted">(optional)</span>
         </label>
         <textarea
-          id="inquiry-message"
+          id={id("message")}
           name="message"
           rows={3}
           maxLength={500}
           value={formData.message}
           onChange={handleChange("message")}
-          placeholder="Mention menu preferences, decor requirements, or questions for management…"
-          className="w-full p-4 rounded-xl border border-line bg-surface text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-gold/60 focus:border-gold transition-colors"
+          placeholder="Menu preferences, décor requirements, or questions for management…"
+          aria-invalid={!!errors.message}
+          aria-describedby={describedBy("message")}
+          className={`${inputClass} h-auto py-3 ${errors.message ? errorInput : ""}`}
         />
+        {fieldError("message")}
       </div>
 
-      {/* Submit Button & Disclaimer */}
-      <div className="sm:col-span-2 pt-2">
-        <button
-          type="submit"
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-gold hover:bg-gold-container text-white font-semibold text-xs sm:text-sm h-12 px-8 rounded-xl transition-all shadow-sm active:scale-95"
-        >
-          <WhatsAppGlyph className="w-4 h-4 fill-current" />
-          <span>Send Inquiry via WhatsApp</span>
+      <div className="sm:col-span-2">
+        <button type="submit" className="btn btn-primary w-full sm:w-auto sm:px-8">
+          <WhatsAppGlyph className="h-[18px] w-[18px]" />
+          Send inquiry via WhatsApp
         </button>
-
-        <p className="mt-3 text-xs text-ink-muted leading-relaxed">
-          Submitting opens WhatsApp with your inquiry pre-filled to{" "}
-          <strong className="text-ink font-semibold">0345 5673921</strong>. Nothing is booked until confirmed by venue management.{" "}
+        <p className="mt-4 text-xs leading-relaxed text-ink-muted">
+          Opens WhatsApp with your details for <strong className="font-semibold text-ink">{WHATSAPP_DISPLAY_NUMBER}</strong>.
+          Nothing is booked until confirmed by venue management.{" "}
           <button
             type="button"
             onClick={openTerms}
-            className="text-gold underline hover:text-gold-container transition-colors"
+            aria-haspopup="dialog"
+            className="font-semibold text-gold underline underline-offset-2 hover:text-ink"
           >
-            Review booking terms &amp; conditions
+            Booking terms
           </button>
         </p>
       </div>
