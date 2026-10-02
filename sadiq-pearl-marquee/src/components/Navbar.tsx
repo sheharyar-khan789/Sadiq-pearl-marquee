@@ -2,13 +2,19 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { business, media } from "@/lib/config";
 import { getWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER } from "@/lib/whatsapp";
+import AccountMenu from "./AccountMenu";
 import BookNowButton from "./BookNowButton";
 import Icon, { WhatsAppGlyph } from "./Icon";
+import { endSession } from "./SignOutButton";
 import { useDialog } from "./useDialog";
+import { useSessionStatus } from "./useSessionStatus";
+
+const mobileAccountItem =
+  "flex min-h-[64px] flex-col items-center justify-center gap-1.5 rounded-xl px-1 text-center text-[0.75rem] font-semibold text-white/85 hover:bg-white/10 hover:text-white";
 
 export const navLinks = [
   { id: "about", label: "About" },
@@ -17,6 +23,7 @@ export const navLinks = [
   { id: "events", label: "Events" },
   { id: "menus", label: "Menus" },
   { id: "gallery", label: "Gallery" },
+  { id: "reviews", label: "Reviews" },
   { id: "contact", label: "Contact" },
 ] as const;
 
@@ -35,6 +42,18 @@ export default function Navbar() {
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
   const closeRef = useDialog(open, close, panelRef);
+  const router = useRouter();
+  const { status, markSignedOut } = useSessionStatus();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const onMobileLogout = async () => {
+    setSigningOut(true);
+    await endSession();
+    setSigningOut(false);
+    markSignedOut();
+    setOpen(false);
+    router.refresh();
+  };
 
   const solid = !isHome || scrolled;
   const href = (id: string) => (isHome ? `#${id}` : `/#${id}`);
@@ -114,30 +133,33 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center gap-2.5">
-            <Link
-              href="/account"
-              aria-label="Your account"
-              className={`hidden h-11 w-11 place-items-center rounded-full border transition-colors lg:grid ${
-                solid
-                  ? "border-line-strong/60 text-ink hover:border-ink/60"
-                  : "border-white/35 text-white hover:border-white/70 hover:bg-white/10"
-              }`}
-            >
-              <Icon name="user" className="h-[18px] w-[18px]" />
-            </Link>
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Chat on WhatsApp: ${WHATSAPP_DISPLAY_NUMBER}`}
-              className={`hidden h-11 w-11 place-items-center rounded-full border transition-colors lg:grid ${
-                solid
-                  ? "border-line-strong/60 text-ink hover:border-ink/60"
-                  : "border-white/35 text-white hover:border-white/70 hover:bg-white/10"
-              }`}
-            >
-              <WhatsAppGlyph className="h-[18px] w-[18px]" />
-            </a>
+            {/* Customer sign-in (never admin). Hidden until the session is known, so it doesn't flicker. */}
+            <div className={`hidden items-center gap-2.5 lg:flex ${status.state === "loading" ? "invisible" : ""}`}>
+              {status.state === "signed-in" ? (
+                <AccountMenu name={status.name} email={status.email} solid={solid} onSignedOut={markSignedOut} />
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className={`inline-flex h-11 items-center px-2 text-[0.8125rem] font-semibold transition-colors ${
+                      solid ? "text-ink-soft hover:text-ink" : "text-white/85 hover:text-white"
+                    }`}
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className={`inline-flex h-11 items-center rounded-full border px-4 text-[0.8125rem] font-semibold transition-colors ${
+                      solid
+                        ? "border-line-strong/60 text-ink hover:border-ink/60"
+                        : "border-white/35 text-white hover:border-white/70 hover:bg-white/10"
+                    }`}
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
             <BookNowButton className={`btn btn-sm hidden whitespace-nowrap lg:inline-flex ${solid ? "btn-primary" : "btn-accent"}`}>
               Book Your Event
             </BookNowButton>
@@ -228,18 +250,41 @@ export default function Navbar() {
             View the full photo gallery
             <Icon name="arrow" className="h-4 w-4" />
           </Link>
-          <Link
-            href="/account"
-            onClick={() => setOpen(false)}
-            className="mt-1 flex min-h-[44px] items-center gap-2 text-sm font-semibold text-white/80 hover:text-white"
-          >
-            <Icon name="user" className="h-4 w-4 text-gold-light" />
-            Sign in / Your account
-          </Link>
         </nav>
 
         <div className="container-px relative space-y-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
-          <BookNowButton onOpen={close} className="btn btn-accent w-full">
+          {/* Customer account (never admin). */}
+          {status.state === "signed-in" ? (
+            <div className="rounded-2xl border border-white/10 p-2">
+              <p className="truncate px-3 pb-1 pt-2 text-xs text-white/60">
+                Signed in{status.email ? ` as ${status.email}` : ""}
+              </p>
+              <div className="grid grid-cols-3 gap-1">
+                <Link href="/account" onClick={close} className={mobileAccountItem}>
+                  <Icon name="user" className="h-4 w-4 text-gold-light" />
+                  My Account
+                </Link>
+                <Link href="/account/bookings" onClick={close} className={mobileAccountItem}>
+                  <Icon name="calendar" className="h-4 w-4 text-gold-light" />
+                  My Bookings
+                </Link>
+                <button type="button" onClick={onMobileLogout} disabled={signingOut} className={mobileAccountItem}>
+                  <Icon name="logout" className="h-4 w-4 text-gold-light" />
+                  {signingOut ? "Signing out…" : "Logout"}
+                </button>
+              </div>
+            </div>
+          ) : status.state === "signed-out" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/login" onClick={close} className="btn btn-outline-light w-full">
+                Login
+              </Link>
+              <Link href="/signup" onClick={close} className="btn btn-outline-light w-full">
+                Sign Up
+              </Link>
+            </div>
+          ) : null}
+          <BookNowButton onClick={close} className="btn btn-accent w-full">
             Book Your Event
           </BookNowButton>
           <a

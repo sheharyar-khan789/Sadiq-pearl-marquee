@@ -41,6 +41,11 @@ try {
     console.error(`Refusing: ${email} has not verified its email address yet.`);
     process.exit(1);
   }
+  // Admin sign-in is email + password only (no Google), so the account needs a password.
+  if (!revoke && !user.providerData.some((p) => p.providerId === "password")) {
+    console.error(`Refusing: ${email} has no email/password sign-in. Create admin credentials in Firebase Authentication first.`);
+    process.exit(1);
+  }
   const claims = { ...(user.customClaims ?? {}) };
   if (revoke) delete claims.role;
   else claims.role = ROLE;

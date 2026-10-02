@@ -26,7 +26,18 @@ export async function GET(request: NextRequest) {
       10_000
     );
     if (!result.ok) return json({ error: result.code }, 400);
-    return json(result.availability);
+    // Customers only learn whether a slot can be requested: a slot held by
+    // someone else's pending request is shown as booked, like a confirmed one.
+    const { hallId, today, days } = result.availability;
+    return json({
+      hallId,
+      today,
+      days: days.map((d) => ({
+        date: d.date,
+        status: d.status,
+        slots: d.slots.map((s) => ({ slotId: s.slotId, state: s.state === "held" ? "booked" : s.state })),
+      })),
+    });
   } catch (error) {
     logBookingError("availability", error);
     return json({ error: "booking_unavailable" }, 503);

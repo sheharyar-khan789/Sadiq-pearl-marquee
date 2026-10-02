@@ -80,7 +80,11 @@ const messages: Record<string, AuthNotice> = {
   },
   "profile/failed": {
     tone: "error",
-    message: "Your account was created, but we couldn't finish setting up your profile. Please try again.",
+    message: "We couldn't complete your account setup. Please try again.",
+  },
+  "admin/not-admin": {
+    tone: "error",
+    message: "This account doesn't have admin access. Customers can sign in from the main website.",
   },
   "reset/send-failed": {
     tone: "error",

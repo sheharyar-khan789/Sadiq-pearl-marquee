@@ -1,29 +1,20 @@
-"use client";
+import Link from "next/link";
 
-import { useBooking } from "./BookingContext";
+/** The one booking entry point: every "Book" CTA leads to /book (sign-in gate → availability → request). */
+export const BOOK_PATH = "/book";
 
-/** Opens the event-inquiry dialog (the form hands the details to WhatsApp). */
 export default function BookNowButton({
   children,
   className,
-  onOpen,
+  onClick,
 }: {
   children: React.ReactNode;
   className?: string;
-  onOpen?: () => void;
+  onClick?: () => void;
 }) {
-  const { open } = useBooking();
   return (
-    <button
-      type="button"
-      aria-haspopup="dialog"
-      onClick={() => {
-        onOpen?.();
-        open();
-      }}
-      className={className}
-    >
+    <Link href={BOOK_PATH} onClick={onClick} className={className}>
       {children}
-    </button>
+    </Link>
   );
 }

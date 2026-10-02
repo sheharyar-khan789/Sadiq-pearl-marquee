@@ -2,13 +2,12 @@ import { BookingProvider } from "@/components/BookingContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import QuickActions from "@/components/QuickActions";
-import BookingModal from "@/components/BookingModal";
 import TermsSheet from "@/components/TermsSheet";
 import MotionEffects from "@/components/MotionEffects";
 import { jsonLdHtml, venueJsonLd, websiteJsonLd } from "@/lib/seo";
 
-// Public-site chrome shared by every public page. Overlays (inquiry modal,
-// terms) live here once, so no page can forget to mount them.
+// Public-site chrome shared by every public page. Overlays (terms) live here
+// once, so no page can forget to mount them. Booking is the /book page.
 // Structured data: the venue and the website, from real configured data only
 // (see src/lib/seo.ts). No self-assigned rating.
 const structuredData = jsonLdHtml([venueJsonLd(), websiteJsonLd()]);
@@ -26,7 +25,6 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       <main id="main">{children}</main>
       <Footer />
       <QuickActions />
-      <BookingModal />
       <TermsSheet />
       <MotionEffects />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />

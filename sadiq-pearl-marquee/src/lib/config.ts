@@ -96,22 +96,6 @@ export const venueFeatures = [
   "Free parking lot",
 ];
 
-// Event types for the WhatsApp inquiry form come from the stored business
-// configuration (Admin → Settings), via /api/public/event-types (Phase 8).
-
-// CONFIRMED session names (Lunch / Dinner). Timings are NOT published because they are unconfirmed.
-// PLACEHOLDER — session options, matches confirmed "Lunch"/"Dinner" dining options
-export const sessionOptions = ["Lunch", "Dinner"] as const;
-
-// PLACEHOLDER — guest-count brackets are about the customer's own party size,
-// not a stated venue capacity. Adjust freely.
-export const guestOptions = [
-  "Under 100 Guests",
-  "100 – 250 Guests",
-  "250 – 500 Guests",
-  "500+ Guests",
-];
-
 // ----------------------------------------------------------------------------
 // CORE MEDIA PATHS — every path is a real, supplied asset under /public.
 // Structure: images/{hero,exterior,interior,events,decoration,dining,gallery},

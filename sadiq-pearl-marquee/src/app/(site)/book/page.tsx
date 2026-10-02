@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/seo";
 import Link from "next/link";
+import BookingAuthGate from "@/components/booking/BookingAuthGate";
 import BookingRequestFlow from "@/components/booking/BookingRequestFlow";
 import { WhatsAppGlyph } from "@/components/Icon";
 import { getSessionUser } from "@/lib/auth/server";
@@ -28,6 +29,11 @@ export default async function BookPage({
   const date = typeof params.date === "string" && isIsoDate(params.date) && params.date >= today ? params.date : null;
   const cfg = bookingStore() !== null ? await loadPublicConfig() : null;
   const slot = cfg?.ok ? (getSlot(cfg.config, params.slot)?.id ?? null) : null;
+  // After signing in, the customer returns here with the same date/slot.
+  const query = new URLSearchParams();
+  if (date) query.set("date", date);
+  if (slot) query.set("slot", slot);
+  const returnTo = query.size ? `/book?${query}` : "/book";
 
   return (
     <section className="bg-surface-low pb-20 pt-32 sm:pb-28 sm:pt-40">
@@ -50,12 +56,14 @@ export default async function BookPage({
           Check <em className="text-gold">availability</em>
         </h1>
         <p className="mt-4 max-w-2xl text-base leading-relaxed text-ink-soft sm:text-[1.0625rem]">
-          Choose a date and a Day or Night slot, then send us a booking request. Nothing is confirmed until our team
-          contacts you.
+          Choose a date and an available Day or Night slot, then send us a booking request. Nothing is confirmed until
+          our team contacts you.
         </p>
 
         <div className="mt-10">
-          {cfg?.ok ? (
+          {!user ? (
+            <BookingAuthGate returnTo={returnTo} />
+          ) : cfg?.ok ? (
             <BookingRequestFlow
               viewer={{
                 signedIn: user !== null,

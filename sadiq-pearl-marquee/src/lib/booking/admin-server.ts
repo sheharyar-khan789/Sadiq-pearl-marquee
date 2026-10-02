@@ -3,7 +3,7 @@
 // ALSO verifies it before touching the database (no query runs for anyone else).
 import "server-only";
 import { notFound } from "next/navigation";
-import { getSessionUser } from "@/lib/auth/server";
+import { getSessionUser, isSuperAdminSession } from "@/lib/auth/server";
 import type { CustomerProfile } from "@/lib/account/profile";
 import { AUDIT_LABELS, type AuditRecord } from "./audit-model";
 import { activeSlots, anyLabel, DEFAULT_HALL_ID, slotLabel, type BusinessConfig } from "./catalog";
@@ -28,7 +28,7 @@ const ACTIVE = ["pending", "under_review", "confirmed"] as const;
 
 export async function run<T>(context: string, work: (store: BookingStore) => Promise<T>): Promise<AdminResult<T>> {
   const user = await getSessionUser(); // cached per request; verifies signature, expiry, revocation
-  if (!user || user.role !== "super_admin" || !user.emailVerified) notFound();
+  if (!user || !isSuperAdminSession(user)) notFound();
   const store = bookingStore();
   if (!store) return { ok: false, reason: "unavailable" };
   try {

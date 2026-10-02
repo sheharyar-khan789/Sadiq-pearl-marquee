@@ -1,14 +1,14 @@
 import Image from "next/image";
 import { business } from "@/lib/config";
 import { getWhatsAppUrl, WHATSAPP_DISPLAY_NUMBER } from "@/lib/whatsapp";
-import BookingForm from "./BookingForm";
+import BookNowButton from "./BookNowButton";
 import SectionHead from "./Section";
 import Icon, { WhatsAppGlyph } from "./Icon";
 
 const steps = [
-  "Send your date, event and guest count",
-  "Management replies on WhatsApp with availability and menu options",
-  "Your date is confirmed by the venue",
+  "Sign in or create your customer account",
+  "Choose a date and an available Day or Night slot",
+  "Send your booking request — our team reviews it and contacts you",
 ];
 
 export default function FinalCta() {
@@ -35,7 +35,7 @@ export default function FinalCta() {
                 Ask about your <em className="text-gold-light">date</em>
               </>
             }
-            intro="Tell us about your wedding, reception or family gathering. Management will reply on WhatsApp with availability and per-head menu options."
+            intro="See which dates and Day / Night slots are free, then send a booking request for your wedding, reception or family gathering."
           />
 
           <ol data-reveal className="mt-10 space-y-5">
@@ -70,7 +70,24 @@ export default function FinalCta() {
 
         <div className="lg:col-span-7">
           <div data-reveal="depth" className="rounded-3xl bg-surface p-6 text-ink shadow-frame sm:p-8 lg:p-10">
-            <BookingForm />
+            <p className="eyebrow">Online booking</p>
+            <h3 className="mt-3 font-display text-[2rem] leading-tight text-ink sm:text-[2.25rem]">
+              Check availability &amp; <em className="text-gold">request your date</em>
+            </h3>
+            <p className="mt-4 text-[0.9375rem] leading-relaxed text-ink-soft">
+              Every date shows its Day and Night slots as available or booked. A request holds your slot while our team
+              reviews it — nothing is confirmed until we contact you.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <BookNowButton className="btn btn-primary">
+                <Icon name="calendar" className="h-4 w-4" />
+                Book Your Event
+              </BookNowButton>
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline">
+                <WhatsAppGlyph className="h-[18px] w-[18px] text-gold" />
+                Ask on WhatsApp
+              </a>
+            </div>
           </div>
         </div>
       </div>

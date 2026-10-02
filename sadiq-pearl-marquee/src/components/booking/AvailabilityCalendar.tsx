@@ -34,6 +34,7 @@ export default function AvailabilityCalendar({
   canGoBack,
   canGoForward,
   loading,
+  slotLabels,
 }: {
   month: string; // YYYY-MM
   days: DayAvailability[] | null;
@@ -43,12 +44,18 @@ export default function AvailabilityCalendar({
   canGoBack: boolean;
   canGoForward: boolean;
   loading: boolean;
+  /** Display names of the slots, e.g. { day: "Day", night: "Night" }. */
+  slotLabels: Record<string, string>;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const selectable = (d: DayAvailability) => d.status === "available" || d.status === "partial";
   const leadingBlanks = (new Date(`${month}-01T00:00:00Z`).getUTCDay() + 6) % 7;
   const firstSelectable = days?.find(selectable)?.date;
   const tabStop = days?.some((d) => d.date === selected && selectable(d)) ? selected : firstSelectable;
+
+  const open = (d: DayAvailability) => d.status === "available" || d.status === "partial" || d.status === "unavailable";
+  const slotSummary = (d: DayAvailability) =>
+    d.slots.map((s) => `${slotLabels[s.slotId] ?? s.slotId} ${s.state === "available" ? "available" : "booked"}`).join(", ");
 
   const focusDate = (date: string) =>
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${date}"]`)?.focus();
@@ -121,14 +128,30 @@ export default function AvailabilityCalendar({
                   disabled={!canPick}
                   tabIndex={d.date === tabStop ? 0 : -1}
                   aria-pressed={isSelected}
-                  aria-label={`${longDate(d.date)}, ${STATUS_TEXT[d.status]}`}
+                  aria-label={`${longDate(d.date)}, ${open(d) ? slotSummary(d) : STATUS_TEXT[d.status]}`}
                   onClick={() => onSelect(d.date)}
                   onKeyDown={(e) => onKeyDown(e, index)}
                   className={`relative flex h-10 min-w-0 flex-col items-center justify-center rounded-xl border text-[0.9375rem] font-semibold tabular-nums transition-colors disabled:cursor-not-allowed sm:aspect-square sm:h-auto ${tone}`}
                 >
                   {Number(d.date.slice(8))}
-                  {d.status === "partial" && !isSelected && (
-                    <span aria-hidden="true" className="absolute bottom-1.5 h-1 w-1 rounded-full bg-gold" />
+                  {/* One dot per slot, in order (Day, Night): filled = available. */}
+                  {open(d) && (
+                    <span aria-hidden="true" className="absolute bottom-1 flex gap-1 sm:bottom-1.5">
+                      {d.slots.map((s) => (
+                        <span
+                          key={s.slotId}
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            s.state === "available"
+                              ? isSelected
+                                ? "bg-surface"
+                                : "bg-emerald-600"
+                              : isSelected
+                                ? "bg-surface/35"
+                                : "bg-ink-muted/35"
+                          }`}
+                        />
+                      ))}
+                    </span>
                   )}
                 </button>
               );
@@ -144,6 +167,13 @@ export default function AvailabilityCalendar({
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="h-3.5 w-3.5 rounded border border-gold-container/60 bg-gold-pale/50" /> One slot left
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="flex gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+            <span className="h-1.5 w-1.5 rounded-full bg-ink-muted/35" />
+          </span>
+          {Object.values(slotLabels).join(" / ")}: available / booked
         </li>
         <li className="flex items-center gap-2">
           <span aria-hidden="true" className="h-3.5 w-3.5 rounded bg-surface-mid" /> Fully booked

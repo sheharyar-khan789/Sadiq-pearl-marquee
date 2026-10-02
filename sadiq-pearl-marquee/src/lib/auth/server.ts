@@ -28,7 +28,10 @@ function toSessionUser(token: DecodedIdToken): SessionUser {
     name: typeof token.name === "string" ? token.name : null,
     emailVerified: token.email_verified === true,
     signInProvider: token.firebase?.sign_in_provider ?? null,
-    role: token.role === SUPER_ADMIN_ROLE ? "super_admin" : "customer",
+    // Admin credentials are email + password accounts created in Firebase. A
+    // Google sign-in is always a customer session, even if the account holds
+    // the claim, so every role check below inherits this separation.
+    role: token.role === SUPER_ADMIN_ROLE && token.firebase?.sign_in_provider === "password" ? "super_admin" : "customer",
   };
 }
 
@@ -57,13 +60,25 @@ export async function requireUser(returnTo: string): Promise<SessionUser> {
 }
 
 /**
- * Guard for future admin routes (/admin/*). Non-admins get a 404 so the admin
- * area's existence is not revealed. The role comes only from a verified
- * custom claim, never from client state.
+ * True only for a Super Admin session: the server-set custom claim, a verified
+ * email, AND an email+password sign-in. Admin credentials are created in
+ * Firebase; a Google (customer) sign-in never grants admin access, even for an
+ * account that holds the claim.
+ */
+export function isSuperAdminSession(user: SessionUser): boolean {
+  return user.role === "super_admin" && user.emailVerified && user.signInProvider === "password";
+}
+
+/**
+ * Guard for admin routes (/admin/*). Signed-out visitors go to the separate
+ * admin sign-in; signed-in non-admins get a 404 so the admin area's existence
+ * is not revealed. The role comes only from a verified custom claim, never
+ * from client state.
  */
 export async function requireSuperAdmin(returnTo: string): Promise<SessionUser> {
-  const user = await requireUser(returnTo);
-  if (user.role !== "super_admin" || !user.emailVerified) notFound();
+  const user = await getSessionUser();
+  if (!user) redirect(`/admin/login?next=${encodeURIComponent(returnTo)}`);
+  if (!isSuperAdminSession(user)) notFound();
   return user;
 }
 
@@ -87,6 +102,6 @@ export async function requireSuperAdminApi(
   if (!sameOrigin) return { ok: false, status: 403, error: "forbidden" };
   const user = await getSessionUser();
   if (!user) return { ok: false, status: 401, error: "unauthenticated" };
-  if (user.role !== "super_admin" || !user.emailVerified) return { ok: false, status: 403, error: "forbidden" };
+  if (!isSuperAdminSession(user)) return { ok: false, status: 403, error: "forbidden" };
   return { ok: true, admin: { uid: user.uid, email: user.email } };
 }

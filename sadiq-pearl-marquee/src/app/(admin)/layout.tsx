@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import AdminNav from "@/components/admin/AdminNav";
+import SignOutButton from "@/components/SignOutButton";
 import { safeNextPath } from "@/lib/auth/constants";
 import { requireSuperAdmin } from "@/lib/auth/server";
 
@@ -33,9 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/" className="inline-flex min-h-[44px] items-center font-semibold hover:text-ink">
               View site
             </Link>
-            <Link href="/account" className="inline-flex min-h-[44px] items-center font-semibold hover:text-ink">
-              Account
-            </Link>
+            <SignOutButton redirectTo="/admin/login" className="inline-flex min-h-[44px] items-center font-semibold hover:text-ink" />
           </div>
         </div>
         <AdminNav />

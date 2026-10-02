@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminAuth, isAdminConfigured } from "@/lib/firebase/admin";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/constants";
 import { isSameOrigin } from "@/lib/auth/origin";
+import { getSessionUser } from "@/lib/auth/server";
 
 const RECENT_SIGN_IN_SECONDS = 5 * 60;
 
@@ -19,6 +20,17 @@ function cookieOptions(maxAge: number) {
     path: "/",
     maxAge,
   };
+}
+
+/**
+ * Who is signed in, for the public navbar (which is static and can't read the
+ * httpOnly cookie). Only the display name and email of the caller's own
+ * verified session; never the role, so admin status isn't exposed publicly.
+ */
+export async function GET() {
+  const user = await getSessionUser();
+  if (!user) return json({ signedIn: false });
+  return json({ signedIn: true, name: user.name, email: user.email });
 }
 
 export async function POST(request: NextRequest) {

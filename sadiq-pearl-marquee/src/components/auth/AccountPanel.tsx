@@ -156,7 +156,7 @@ export default function AccountPanel({ initial }: { initial: AccountSummary }) {
       {profileStatus === "error" && (
         <section className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-900 sm:p-8">
           <p className="text-[0.9375rem] leading-relaxed">
-            Your account works, but we couldn&rsquo;t finish saving your profile.
+            We couldn&rsquo;t complete your account setup. Please try again.
           </p>
           <button type="button" onClick={onRetryProfile} disabled={busy !== null} className="btn btn-outline mt-4 border-red-300 text-red-900">
             {busy === "profile" ? "Retrying…" : "Try again"}

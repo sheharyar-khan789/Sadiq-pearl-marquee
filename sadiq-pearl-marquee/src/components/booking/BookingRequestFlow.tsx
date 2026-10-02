@@ -39,7 +39,7 @@ interface Result {
   slotId: SlotId;
 }
 
-export const SLOT_TAKEN_MESSAGE = "The selected slot is no longer available. Please choose another available slot.";
+export const SLOT_TAKEN_MESSAGE = "This time slot is no longer available. Please choose another slot.";
 const monthOf = (date: string) => date.slice(0, 7);
 const shiftMonth = (month: string, delta: number) => {
   const [y, m] = month.split("-").map(Number);
@@ -61,7 +61,7 @@ const labelClass = "mb-1.5 block text-[0.8125rem] font-semibold text-ink";
 
 const STATE_LABEL: Record<SlotState, string> = {
   available: "Available",
-  held: "Requested — on hold",
+  held: "Booked",
   booked: "Booked",
   closed: "Unavailable",
 };
@@ -318,7 +318,7 @@ export default function BookingRequestFlow({
       } else {
         setNotice({
           tone: "error",
-          message: "Online requests are temporarily unavailable. Please try again shortly, or contact us on WhatsApp.",
+          message: "We couldn't submit your booking request. Please try again, or contact us on WhatsApp.",
         });
       }
     } catch {
@@ -404,6 +404,7 @@ export default function BookingRequestFlow({
                 days={days}
                 selected={date}
                 loading={loading}
+                slotLabels={Object.fromEntries(slots.map((s) => [s.id, s.label]))}
                 onSelect={(d) => {
                   setDate(d);
                   setSlotId(null);
@@ -453,9 +454,7 @@ export default function BookingRequestFlow({
                               ? "bg-surface/15 text-surface"
                               : free
                                 ? "bg-emerald-50 text-emerald-800"
-                                : state === "held"
-                                  ? "bg-amber-50 text-amber-800"
-                                  : "bg-surface-high text-ink-soft"
+                                : "bg-surface-high text-ink-soft"
                           }`}
                         >
                           {checked ? "Selected" : STATE_LABEL[state]}
@@ -789,6 +788,9 @@ export default function BookingRequestFlow({
                 <WhatsAppGlyph className="h-[18px] w-[18px]" />
                 Message us on WhatsApp
               </a>
+              <Link href="/account/bookings" className="btn btn-outline">
+                View My Bookings
+              </Link>
               <button type="button" onClick={reset} className="btn btn-outline">
                 Make another request
               </button>
