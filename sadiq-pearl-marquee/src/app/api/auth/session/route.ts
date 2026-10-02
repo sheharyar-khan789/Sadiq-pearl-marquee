@@ -5,6 +5,7 @@ import { adminAuth, isAdminConfigured } from "@/lib/firebase/admin";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "@/lib/auth/constants";
 import { isSameOrigin } from "@/lib/auth/origin";
 import { getSessionUser } from "@/lib/auth/server";
+import { ensureProfileFromToken } from "@/lib/account/ensure-profile";
 
 const RECENT_SIGN_IN_SECONDS = 5 * 60;
 
@@ -67,7 +68,11 @@ export async function POST(request: NextRequest) {
     if (!allowed) return json({ error: "recent_sign_in_required" }, 401);
 
     const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn: SESSION_MAX_AGE_SECONDS * 1000 });
-    const response = json({ ok: true, emailVerified: decoded.email_verified === true });
+    // The customer profile (users/{uid}) is created/updated here with the
+    // Admin SDK, from the verified token, so sign-in never depends on the
+    // browser writing to Firestore.
+    const profileOk = await ensureProfileFromToken(decoded);
+    const response = json({ ok: true, emailVerified: decoded.email_verified === true, profileOk });
     response.cookies.set(SESSION_COOKIE, sessionCookie, cookieOptions(SESSION_MAX_AGE_SECONDS));
     return response;
   } catch (error) {

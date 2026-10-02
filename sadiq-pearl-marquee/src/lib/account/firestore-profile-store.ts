@@ -24,6 +24,32 @@ export function firestoreProfileStore(db: Firestore): ProfileStore {
       const snap = await users.doc(uid).get();
       return snap.exists ? toProfile(uid, snap.data()!) : null;
     },
+    async ensure(identity) {
+      const ref = users.doc(identity.uid);
+      const name = identity.name?.trim().slice(0, 100) || null;
+      await db.runTransaction(async (t) => {
+        const snap = await t.get(ref);
+        if (!snap.exists) {
+          // Same shape the browser used to create (see firestore.rules).
+          t.set(ref, {
+            uid: identity.uid,
+            email: identity.email,
+            authProvider: identity.signInProvider === "google.com" ? "google.com" : "password",
+            emailVerified: identity.emailVerified,
+            ...(name ? { name } : {}),
+            ...(identity.photoURL?.startsWith("https://") && identity.photoURL.length <= 2048 ? { photoURL: identity.photoURL } : {}),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+        const data = snap.data()!;
+        const changes: Record<string, unknown> = {};
+        if (data.emailVerified !== identity.emailVerified) changes.emailVerified = identity.emailVerified;
+        if (!data.name && name) changes.name = name;
+        if (Object.keys(changes).length) t.update(ref, { ...changes, updatedAt: FieldValue.serverTimestamp() });
+      });
+    },
     async list(limit) {
       const snap = await users.limit(limit).get();
       return snap.docs

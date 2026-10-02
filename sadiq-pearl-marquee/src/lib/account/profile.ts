@@ -62,8 +62,19 @@ export interface SessionIdentity {
   signInProvider: string | null;
 }
 
+/** What a fresh sign-in tells us about the account (from the verified ID token). */
+export interface SignInIdentity extends SessionIdentity {
+  name: string | null;
+  photoURL: string | null;
+}
+
 export interface ProfileStore {
   get(uid: string): Promise<CustomerProfile | null>;
+  /**
+   * Creates users/{uid} on first sign-in, or keeps emailVerified (and a
+   * missing name) in step. Never overwrites a name or phone the customer set.
+   */
+  ensure(identity: SignInIdentity): Promise<void>;
   /** Admin only (Phase 5): customer profiles, most recently updated first. */
   list(limit: number): Promise<CustomerProfile[]>;
   /** Saves name/phone; creates the document from the session identity if missing. */
@@ -81,6 +92,18 @@ export class MemoryProfileStore implements ProfileStore {
   }
   async list(limit: number) {
     return [...this.docs.values()].slice(0, limit).map((d) => ({ ...d }));
+  }
+  async ensure(identity: SignInIdentity) {
+    const current = this.docs.get(identity.uid);
+    this.docs.set(identity.uid, {
+      uid: identity.uid,
+      email: current?.email ?? identity.email,
+      authProvider: current?.authProvider ?? (identity.signInProvider === "google.com" ? "google.com" : "password"),
+      emailVerified: identity.emailVerified,
+      name: current?.name ?? identity.name,
+      phone: current?.phone ?? null,
+      updatedAt: new Date().toISOString(),
+    });
   }
   /** TEST-ONLY seeding. */
   seed(profiles: CustomerProfile[]) {

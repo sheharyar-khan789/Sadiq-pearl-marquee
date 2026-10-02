@@ -50,6 +50,9 @@ function revive<T>(value: unknown): T {
   return value as T;
 }
 
+/** Upper bound when reading one customer's documents to filter/sort in memory. */
+const CUSTOMER_SCAN_LIMIT = 1000;
+
 const asTimestamp = (version: unknown): Timestamp => {
   if (!(version instanceof Timestamp)) throw new Error("Missing document version for a conditional write.");
   return version;
@@ -77,10 +80,11 @@ function transaction(db: Firestore, t: Transaction): BookingTransaction {
     getBooking: (id) => read<BookingRecord>(bookings.doc(id)),
     getLock: (key) => read<SlotLock>(locks.doc(key)),
     async listCustomerBookings(customerId, statuses) {
-      const snap = await t.get(
-        bookings.where("customerId", "==", customerId).where("status", "in", [...statuses]).limit(50)
-      );
-      return snap.docs.map((d) => revive<BookingRecord>(d.data()));
+      // Single-field query (no composite index needed); a customer's bookings
+      // are few, so the status filter runs here.
+      const wanted = new Set<string>(statuses);
+      const snap = await t.get(bookings.where("customerId", "==", customerId).limit(CUSTOMER_SCAN_LIMIT));
+      return snap.docs.map((d) => revive<BookingRecord>(d.data())).filter((b) => wanted.has(b.status)).slice(0, 50);
     },
     getRequest: (id) => read<BookingRequestRecord>(requests.doc(id)),
     async listOpenRequestsForBooking(bookingId) {
@@ -184,14 +188,11 @@ export function firestoreBookingStore(db: Firestore): BookingStore {
   return {
     runTransaction: (work) => db.runTransaction((t) => work(transaction(db, t)), { maxAttempts: 5 }),
     async listLocks(hallId, from, to) {
-      // Composite index: slotLocks (hallId ASC, date ASC) — see firestore.indexes.json.
-      const snap = await db
-        .collection(SLOT_LOCKS_COLLECTION)
-        .where("hallId", "==", hallId)
-        .where("date", ">=", from)
-        .where("date", "<=", to)
-        .get();
-      return snap.docs.map((d) => revive<SlotLock>(d.data()));
+      // Date range only (single-field index, created automatically by
+      // Firestore); the hall filter runs here. A range is at most a few
+      // months of dates x slots x halls, so this stays small.
+      const snap = await db.collection(SLOT_LOCKS_COLLECTION).where("date", ">=", from).where("date", "<=", to).get();
+      return snap.docs.map((d) => revive<SlotLock>(d.data())).filter((l) => l.hallId === hallId);
     },
     async getBooking(bookingId) {
       const snap = await db.collection(BOOKINGS_COLLECTION).doc(bookingId).get();
@@ -289,11 +290,14 @@ export function firestoreBookingStore(db: Firestore): BookingStore {
 
     // ----- Phase 9
     async listNotificationsForCustomer(customerId, { before, limit }) {
-      // Composite index: notifications (customerId ASC, createdAt DESC) — see firestore.indexes.json.
-      let query = db.collection(NOTIFICATIONS_COLLECTION).where("customerId", "==", customerId).orderBy("createdAt", "desc");
-      if (before) query = query.startAfter(Timestamp.fromDate(before));
-      const snap = await query.limit(limit).get();
-      return snap.docs.map((d) => revive<NotificationRecord>(d.data()));
+      // Single-field query (no composite index needed); newest first and the
+      // "before" cursor are applied here over the customer's own notifications.
+      const snap = await db.collection(NOTIFICATIONS_COLLECTION).where("customerId", "==", customerId).limit(CUSTOMER_SCAN_LIMIT).get();
+      return snap.docs
+        .map((d) => revive<NotificationRecord>(d.data()))
+        .filter((n) => !before || n.createdAt.getTime() < before.getTime())
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit);
     },
     async countUnreadNotifications(customerId) {
       const snap = await db.collection(NOTIFICATIONS_COLLECTION).where("customerId", "==", customerId).where("readAt", "==", null).count().get();

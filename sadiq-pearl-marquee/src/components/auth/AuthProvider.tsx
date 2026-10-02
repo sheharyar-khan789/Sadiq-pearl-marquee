@@ -15,7 +15,7 @@ import {
 } from "firebase/auth";
 import { getFirebase } from "@/lib/firebase/client";
 import { isFirebaseConfigured } from "@/lib/firebase/config";
-import { ensureUserProfile } from "@/lib/auth/profile";
+import { syncProfileOnServer } from "@/lib/auth/profile";
 import { authErrorCode, describeAuthError, noticeFor, type AuthNotice } from "@/lib/auth/errors";
 
 export type AuthResult = { ok: true; notice?: AuthNotice } | { ok: false; notice: AuthNotice };
@@ -41,11 +41,11 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/** Longest a sign-in waits for the Firestore profile write before continuing. */
-const PROFILE_WAIT_MS = 8000;
-
-/** Exchanges the user's ID token for the server's httpOnly session cookie. */
-async function startServerSession(user: User): Promise<void> {
+/**
+ * Exchanges the user's ID token for the server's httpOnly session cookie. The
+ * server also creates/refreshes the customer profile; returns whether it did.
+ */
+async function startServerSession(user: User): Promise<{ profileOk: boolean }> {
   const idToken = await user.getIdToken();
   const response = await fetch("/api/auth/session", {
     method: "POST",
@@ -58,6 +58,8 @@ async function startServerSession(user: User): Promise<void> {
       code: response.status === 503 ? "session/unavailable" : "session/failed",
     });
   }
+  const data = (await response.json().catch(() => ({}))) as { profileOk?: boolean };
+  return { profileOk: data.profileOk !== false };
 }
 
 function verificationSettings() {
@@ -70,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [emailVerified, setEmailVerified] = useState(false);
   const [profileStatus, setProfileStatus] = useState<ProfileStatus>("idle");
   // One profile sync at a time per user (sign-up and the auth listener can race).
-  const profileSync = useRef<Map<string, Promise<void>>>(new Map());
+  const profileSync = useRef<Map<string, Promise<boolean>>>(new Map());
   // While an explicit sign-in/sign-up flow runs, it (not the listener) syncs the
   // profile, so e.g. the sign-up name is saved before the profile is created.
   const flowActive = useRef(false);
@@ -78,12 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const syncProfile = useCallback(async (u: User): Promise<boolean> => {
     let pending = profileSync.current.get(u.uid);
     if (!pending) {
-      pending = ensureUserProfile(u).finally(() => profileSync.current.delete(u.uid));
+      pending = syncProfileOnServer().finally(() => profileSync.current.delete(u.uid));
       profileSync.current.set(u.uid, pending);
     }
     try {
-      await pending;
-      setProfileStatus("ready");
+      // false: no server session yet (e.g. only the browser is signed in).
+      setProfileStatus((await pending) ? "ready" : "idle");
       return true;
     } catch (error) {
       describeAuthError(error, "profile sync");
@@ -104,28 +106,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [syncProfile]);
 
-  /** Shared tail of every successful sign-in: profile + server session. */
-  const finishSignIn = useCallback(
-    async (u: User): Promise<AuthResult> => {
-      // Run in parallel, and never let a slow or unreachable Firestore hold up
-      // the sign-in itself: wait for the profile at most PROFILE_WAIT_MS. If it
-      // is still pending, the account page syncs it again and reports failures.
-      const profile = Promise.race([
-        syncProfile(u),
-        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), PROFILE_WAIT_MS)),
-      ]);
-      const [profileOk, session] = await Promise.all([
-        profile,
-        startServerSession(u).then(
-          () => null,
-          (error: unknown) => error
-        ),
-      ]);
-      if (session) return { ok: false, notice: describeAuthError(session, "session start") };
-      return profileOk === false ? { ok: true, notice: noticeFor("profile/failed") } : { ok: true };
-    },
-    [syncProfile]
-  );
+  /** Shared tail of every successful sign-in: server session (+ server-side profile). */
+  const finishSignIn = useCallback(async (u: User): Promise<AuthResult> => {
+    try {
+      const { profileOk } = await startServerSession(u);
+      setProfileStatus(profileOk ? "ready" : "error");
+      return profileOk ? { ok: true } : { ok: true, notice: noticeFor("profile/failed") };
+    } catch (error) {
+      return { ok: false, notice: describeAuthError(error, "session start") };
+    }
+  }, []);
 
   /** Marks an explicit auth flow as running for its whole duration. */
   const inFlow = useCallback(async <T,>(run: () => Promise<T>): Promise<T> => {
@@ -165,7 +155,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // The account now exists; report (don't hide) any later partial failure.
         let verificationNotice: AuthNotice | undefined;
         try {
-          if (name.trim()) await updateProfile(created, { displayName: name.trim().slice(0, 100) });
+          if (name.trim()) {
+            await updateProfile(created, { displayName: name.trim().slice(0, 100) });
+            await created.getIdToken(true); // the token the server reads now carries the name
+          }
         } catch (error) {
           describeAuthError(error, "display name update");
         }
@@ -225,13 +218,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await current.reload();
       await current.getIdToken(true); // fresh token carries the new email_verified claim
       setEmailVerified(current.emailVerified);
-      await syncProfile(current);
-      await startServerSession(current); // server session now reflects verification
+      // Server session (and the profile's emailVerified) now reflect verification.
+      const { profileOk } = await startServerSession(current);
+      setProfileStatus(profileOk ? "ready" : "error");
       return { ok: true as const, verified: current.emailVerified };
     } catch (error) {
       return { ok: false as const, notice: describeAuthError(error, "verification refresh") };
     }
-  }, [syncProfile]);
+  }, []);
 
   /**
    * Asks Firebase to email a password-reset link. Firebase creates, sends and
